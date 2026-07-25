@@ -1,3 +1,6 @@
+[b]Discord Community:[/b] [url=https://discord.gg/eVBebZ2N9s]https://discord.gg/eVBebZ2N9s[/url]
+[b]Version:[/b] v0.5.1 (Target: RimWorld 1.6)
+
 [h1]RimSynapse - Core[/h1]
 [b]The foundational Large Language Model (LLM) connector and narrative intelligence engine for RimWorld.[/b]
 
@@ -9,7 +12,7 @@ RimSynapse Core is a powerful, asynchronous background engine that natively conn
 [*] [b]Universal Backend Support:[/b] Connects natively to LM Studio, Ollama, or any OpenAI-compatible local API (e.g. OpenRouter, LocalAI) without complex setups.
 [*] [b]Background Threading:[/b] Never drops a frame. All LLM requests are queued, processed, and sanitized asynchronously on separate threads.
 [*] [b]Dynamic Priority Queue:[/b] Intelligently manages hundreds of requests with an advanced Linux-style top-monitor queue system, prioritizing critical events and starving obsolete prompts.
-[*] [b]Auto-Discovery & Keep-Alive:[/b] Automatically detects active models and manages keep-alive pings to ensure your LLMs don't go to sleep.
+[*] [b]Auto-Discovery and Keep-Alive:[/b] Automatically detects active models and manages keep-alive pings to ensure your LLMs don't go to sleep.
 [*] [b]Event Tracking Ledger:[/b] Snapshots colony wealth, nutrition, and colonist status chronologically when events trigger, feeding the AI perfect narrative context.
 [*] [b]Faction Perception Tracking:[/b] Factions dynamically adjust their subjective perception of your wealth and strength through visits and trade.
 [*] [b]Colony Snapshots:[/b] Captures snapshots of the colony's mood, health, and stats when events occur to provide rich context.
@@ -22,7 +25,7 @@ RimSynapse Core is a powerful, asynchronous background engine that natively conn
 [h2]Changelog (v0.5.1)[/h2]
 [list]
 [*] [b]NEW: API-Level Thinking Controls:[/b] Support for OpenAI/LM Studio reasoning and thinking tokens configuration in mod options.
-[*] [b]NEW: Historical Records & Letter Archival:[/b] Automatically generates "Colony Established" and "Colony Named" ceremony event records and sends letter alerts.
+[*] [b]NEW: Historical Records and Letter Archival:[/b] Automatically generates "Colony Established" and "Colony Named" ceremony event records and sends letter alerts.
 [*] [b]NEW: Stele Links stored in Core:[/b] Moved Stele Link monument bindings and colony ceremony logs to `SynapseCoreWorldComponent` for unified tracking.
 [*] [b]NEW: Resident Life Support:[/b] Resident pawns will cook simple meals in their inventories near heat sources if low on food.
 [*] [b]Pawn-level Job Tracking:[/b] Relocated job and location tracking to per-pawn `SynapseCorePawnComp` (`CompTickRare`) to optimize CPU usage.
@@ -56,6 +59,6 @@ RimSynapse Core is a powerful, asynchronous background engine that natively conn
 
 ---
 
-[h2]Open Source & Support[/h2]
+[h2]Open Source and Support[/h2]
 GitHub: [url]https://github.com/RimSynapse/Core[/url]
 Buy me a coffee: [url]https://buymeacoffee.com/archdukejim[/url]

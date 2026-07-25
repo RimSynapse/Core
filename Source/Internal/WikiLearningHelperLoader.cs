@@ -86,6 +86,7 @@ namespace RimSynapse.Internal
                             }
 
                             DefDatabase<ConceptDef>.Add(concept);
+                            Core.Patches.Patch_PlayerKnowledgeDatabase_GetKnowledge.EnsureKeyExists(concept.defName);
                             count++;
                         }
                         catch (Exception ex)
@@ -98,6 +99,14 @@ namespace RimSynapse.Internal
 
             if (count > 0)
             {
+                try
+                {
+                    PlayerKnowledgeDatabase.ReloadAndRebind();
+                }
+                catch (Exception ex)
+                {
+                    SynapseLogger.Warning($"Failed to reload PlayerKnowledgeDatabase after wiki injection: {ex.Message}");
+                }
                 SynapseLogger.Message($"[RimSynapse] Successfully injected {count} Wiki guides into the Learning Helper database.");
             }
         }
