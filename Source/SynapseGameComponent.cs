@@ -174,16 +174,54 @@ namespace RimSynapse
             SynapseLogger.Message("Loaded game. Queues cleared.");
         }
 
+        /// <summary>
+        /// Directory backing the developer file-drop channel.
+        ///
+        /// The other end of this channel is the MCP server's gameIpc tools, which resolve
+        /// RIMSYNAPSE_ROOT/Core, so this honours the same variable first and only then falls
+        /// back to the Core mod's own folder. Both ends must agree or the channel silently
+        /// does nothing. These paths were previously hardcoded to a d:\ checkout, so every
+        /// lookup missed on any other machine while still costing the File.Exists calls.
+        /// </summary>
+        private static string _scriptingDir;
+        private static string ScriptingDir
+        {
+            get
+            {
+                if (_scriptingDir != null) return _scriptingDir;
+
+                string root = System.Environment.GetEnvironmentVariable("RIMSYNAPSE_ROOT");
+                if (!string.IsNullOrEmpty(root))
+                {
+                    string candidate = System.IO.Path.Combine(root, "Core");
+                    if (System.IO.Directory.Exists(candidate))
+                    {
+                        _scriptingDir = candidate;
+                        return _scriptingDir;
+                    }
+                }
+
+                string modRoot = RimSynapseMod.Instance?.Content?.RootDir;
+                _scriptingDir = !string.IsNullOrEmpty(modRoot) ? modRoot : GenFilePaths.ConfigFolderPath;
+                return _scriptingDir;
+            }
+        }
+
+        private static string ScriptingPath(string fileName)
+        {
+            return System.IO.Path.Combine(ScriptingDir, fileName);
+        }
+
         private void PollScriptInputFile()
         {
             try
             {
-                string inputPath = "d:/github/rimsynapse/Core/script_input.json";
-                string outputPath = "d:/github/rimsynapse/Core/script_output.log";
-                string requestPath = "d:/github/rimsynapse/Core/game_state_request.json";
-                string statePath = "d:/github/rimsynapse/Core/game_state.json";
-                string toolInputPath = "d:/github/rimsynapse/Core/tool_input.json";
-                string toolOutputPath = "d:/github/rimsynapse/Core/tool_output.json";
+                string inputPath = ScriptingPath("script_input.json");
+                string outputPath = ScriptingPath("script_output.log");
+                string requestPath = ScriptingPath("game_state_request.json");
+                string statePath = ScriptingPath("game_state.json");
+                string toolInputPath = ScriptingPath("tool_input.json");
+                string toolOutputPath = ScriptingPath("tool_output.json");
 
                 // Poll script execution
                 if (System.IO.File.Exists(inputPath))
@@ -206,8 +244,8 @@ namespace RimSynapse
                     });
                 }
 
-                string storytellerInputPath = "d:/github/rimsynapse/Core/storyteller_input.txt";
-                string storytellerOutputPath = "d:/github/rimsynapse/Core/storyteller_output.log";
+                string storytellerInputPath = ScriptingPath("storyteller_input.txt");
+                string storytellerOutputPath = ScriptingPath("storyteller_output.log");
 
                 // Poll storyteller command execution
                 if (System.IO.File.Exists(storytellerInputPath))

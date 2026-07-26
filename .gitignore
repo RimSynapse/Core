@@ -17,3 +17,7 @@ Thumbs.db
 # RimWorld runtime
 __pycache__/
 *.pyc
+
+# MSBuild intermediates
+Source/obj/
+Source/bin/
