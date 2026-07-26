@@ -28,6 +28,7 @@ namespace RimSynapse
         /// <summary>Interval between opportunistic task checks during pause (seconds).</summary>
         private const float PauseCheckInterval = 2.0f;
         private static int _fileCheckCooldown = 0;
+        private static int _tierCheckCooldown = 0;
 
         public SynapseGameComponent(Game game) { }
 
@@ -89,6 +90,15 @@ namespace RimSynapse
             {
                 _fileCheckCooldown = 0;
                 PollScriptInputFile();
+            }
+
+            // Re-evaluate the capability tier every ~5 seconds: detects model swaps,
+            // promotes on sustained fast responses, demotes immediately on slow ones.
+            _tierCheckCooldown++;
+            if (_tierCheckCooldown >= 300)
+            {
+                _tierCheckCooldown = 0;
+                SynapseTierController.Update();
             }
 
             // ── Pause-time opportunistic task handling ──

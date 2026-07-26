@@ -120,23 +120,38 @@ namespace RimSynapse.Internal
             float perfScalar = GetPerformanceScalar();
             budget = (int)(budget * perfScalar);
 
+            // Clamp to the class operating point: on a metered backend the token cap
+            // governs, and when the latency floor exceeds the class target the headroom
+            // formula does. This is where measurement actually limits prompt size.
+            var op = SynapseTierController.GetOperatingPoint(eventType);
+            int opRemaining = op.MaxPromptTokens - systemPromptTokens - conversationTokens;
+            if (opRemaining < budget)
+            {
+                budget = opRemaining;
+            }
+
             // Floor at 64 tokens
             return Math.Max(64, budget);
         }
 
         /// <summary>
-        /// Performance-based budget scaling.
-        /// If recent responses are slow, shrink the context budget.
+        /// Performance-based budget scaling, supplied by the tier controller: Minimal
+        /// shrinks the budget, Rich expands it, and the tier itself is derived from
+        /// measured latency rather than fixed thresholds.
         /// </summary>
         private static float GetPerformanceScalar()
         {
-            // Access recent request durations from the queue
-            // (simplified — in practice, read from RequestQueue metrics)
-            float avgMs = RequestQueue.AverageResponseMs;
+            return SynapseTierController.PerformanceScalar;
+        }
 
-            if (avgMs > 10000) return 0.6f;  // Heavy shrink
-            if (avgMs > 5000) return 0.8f;   // Moderate shrink
-            return 1.0f;                      // Full speed
+        /// <summary>
+        /// XML-declared latency target for an event type, or 0 when the profile does not
+        /// set one (the tier controller then applies its built-in defaults).
+        /// </summary>
+        internal static int GetProfileLatencyTargetMs(string eventType)
+        {
+            var profile = FindProfile(eventType);
+            return profile?.latencyTargetMs ?? 0;
         }
 
         /// <summary>

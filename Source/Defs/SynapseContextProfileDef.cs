@@ -28,6 +28,14 @@ namespace RimSynapse
         public float budgetFraction = 0.40f;
 
         /// <summary>
+        /// Target total response latency for this event type, in milliseconds.
+        /// 0 means "use the built-in default for this type" (e.g. dialogue: 500).
+        /// The tier controller sizes prompts so responses land under this target —
+        /// or, when the backend's measured floor exceeds it, under floor × 1.15.
+        /// </summary>
+        public int latencyTargetMs = 0;
+
+        /// <summary>
         /// Which context tiers to include. Valid values:
         /// "Identity" (Tier 1), "PawnState" (Tier 2), "Colony" (Tier 3),
         /// "World" (Tier 4), "Synthetic" (Tier 5).
