@@ -1,0 +1,73 @@
+# RimSynapse Core — Engineering Rules
+
+Core is the API surface for an ecosystem: every companion mod's DLL binds against
+`RimSynapseCore.dll`. Rules here exist because violating them has already broken
+things once.
+
+## Binary compatibility (the rule that broke three mods)
+
+Companion DLLs bind to **exact method signatures**. Appending an optional parameter
+to a public method **removes the old signature from the assembly** — Psychology,
+Conversations and Factions all failed to instantiate when `RegisterTool` gained an
+optional `isMutating` parameter, and the test suite stayed green because dead mods
+run no tests.
+
+- **Never** append optional parameters to, reorder, or otherwise alter an existing
+  public method signature. Add a **separate overload** (see `RegisterTool`,
+  `StartScript`, `ExecuteTool` — all follow this pattern now).
+- The same applies to removing/renaming public types, fields, and enum members.
+- The guard: `Core_AllModsInstantiated` in the TestRunner fails if any mod dies at
+  startup. Run the full suite after touching any public surface.
+
+## Build and test loop
+
+The harness lives in the `Repo-MCP` repo (`harness/*.ps1`); the in-game suite is the
+`TestRunner` repo (loads last, only active with `-synapse-test`).
+
+```powershell
+.\harness\build.ps1              # all mods, dependency order: Core -> Regions -> companions -> Factions
+.\harness\launch.ps1 -Test       # rotates Player.log, runs the TestRunner, self-terminates on SUMMARY
+.\harness\readlog.ps1            # classifies the log; exit 1 on blocking entries or FAILed cases
+```
+
+- **Every behavior change gets a TestRunner case** (`<Repo>_<CaseName>`). The suite
+  must end `0 blocking`.
+- Under `-quicktest` the LLM is **mocked** in `SynapseClient` (canned responses,
+  keyword-branched). Tool tests are deterministic; live-LLM behavior is not covered.
+- A `build.ps1 -Repo X` rebuilds only X and its deps — after public-surface changes
+  in Core, always do a **full** build so companions recompile against it.
+
+## Log conventions (the classifier reads these)
+
+- Handled warnings must not look like thrown exceptions: log the type as
+  `[JsonSerializationException] message`, never `JsonSerializationException: message`.
+- Tool handlers report failure as an `{"error": ...}` payload, never by throwing;
+  callers must not log error payloads under a `[Result]` prefix.
+- Test output goes through `Log.Message` (never `Log.Error` — it double-counts as a
+  blocking entry). Format: `[SYNAPSE-TEST] PASS|FAIL <case> | <detail>`.
+- `SynapseLogger.Message(msg, category)` — performance/tier lines use category
+  `"performance"` and a `[Tier]`/`[Agent]` prefix.
+
+## Agent & performance architecture (0.6+)
+
+- **The agent is the exception path.** The mainline is Harmony-hook pipelines with
+  curated context. Tool search (`SynapseToolIndex`), `list_available_tools` /
+  `describe_tool` serve discovery for unprogrammed situations.
+- **Prompts are budgeted, never unbounded.** `SynapseTierController` picks
+  Minimal/Standard/Rich from *measured* latency (start low, promote on evidence;
+  demote immediately). Per-class operating points implement the objective switch:
+  latency-governed locally, cost-governed on metered cloud backends (all cloud
+  providers are metered by default; `ignoreTokenCosts` is the experimental escape).
+- **Big payloads travel as handles**: `SynapseResultStore` + `get_stored_result`.
+  History compacts via `SynapseAgentHistory`; the latest exchange stays verbatim.
+- **Mutating tools are flagged** (`GameTool.isMutating`, manifest in
+  `EnsureInitialized`). Autonomous runs are gated by `allowAutonomousMutations`.
+  `execute_game_tool` must stay flagged — it can launder any mutation.
+- Never assume all registered tools fit in a prompt; the 2k-window floor governs.
+
+## Branch discipline
+
+- Work lands on `development` via PRs; `main` only via release promotion PRs.
+- Versioning is `0.<iteration>.<minor>`; never plan or tag anything `1.0`.
+- Companion repos commit their built `Assemblies/*.dll`; Core does not (its DLLs
+  attach to GitHub Releases). `Source/obj/` is never tracked.
