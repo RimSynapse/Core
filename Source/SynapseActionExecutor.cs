@@ -48,9 +48,33 @@ namespace RimSynapse
             Action<string> logCallback, 
             Action<bool, string> onComplete)
         {
+            // A response that never claimed to be a script should fall through quietly, but one
+            // that carries a "steps" array and then fails to run is a real problem. Without this
+            // distinction a malformed script was silently downgraded to the flat-call path and
+            // its steps were dropped with nothing in the log to say so.
+            bool looksLikeScript = json.IndexOf("\"steps\"", StringComparison.OrdinalIgnoreCase) >= 0;
+
             try
             {
                 var script = JsonConvert.DeserializeObject<SynapseScript>(json);
+
+                if (looksLikeScript && script != null)
+                {
+                    if (string.IsNullOrEmpty(script.scriptName))
+                    {
+                        logCallback?.Invoke("[Script] Rejected: the response has steps but no scriptName. Falling back to flat calls, so those steps will not run.");
+                        SynapseLogger.Warning($"Script rejected (missing scriptName): {Excerpt(json)}");
+                        return false;
+                    }
+
+                    if (script.steps == null || script.steps.Count == 0)
+                    {
+                        logCallback?.Invoke($"[Script] Rejected: '{script.scriptName}' declares no steps. Falling back to flat calls.");
+                        SynapseLogger.Warning($"Script rejected (no steps): {Excerpt(json)}");
+                        return false;
+                    }
+                }
+
                 if (script != null && !string.IsNullOrEmpty(script.scriptName) && script.steps != null && script.steps.Count > 0)
                 {
                     SynapseGameComponent.Enqueue(() =>
@@ -70,8 +94,27 @@ namespace RimSynapse
                     return true;
                 }
             }
-            catch (Exception) { }
+            catch (Exception ex)
+            {
+                // Only worth reporting when the payload was trying to be a script. Anything else
+                // is an ordinary flat-call response that simply does not deserialise as one.
+                if (looksLikeScript)
+                {
+                    // Type name in brackets rather than "Type: message" — the latter reads as a
+                    // thrown-exception report to log scrapers, and this is a handled warning.
+                    logCallback?.Invoke($"[Script] Malformed script, falling back to flat calls: {ex.Message}");
+                    SynapseLogger.Warning($"Malformed script [{ex.GetType().Name}] {ex.Message} | payload: {Excerpt(json)}");
+                }
+            }
             return false;
+        }
+
+        /// <summary>Short, single-line excerpt of a payload for diagnostics.</summary>
+        private static string Excerpt(string json, int max = 300)
+        {
+            if (string.IsNullOrEmpty(json)) return "<empty>";
+            string oneLine = json.Replace("\r", " ").Replace("\n", " ").Trim();
+            return oneLine.Length <= max ? oneLine : oneLine.Substring(0, max) + "...";
         }
 
         private static void ExecuteFlatCalls(
