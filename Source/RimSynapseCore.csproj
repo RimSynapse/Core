@@ -69,4 +69,12 @@
         <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" />
     </ItemGroup>
 
+    <!-- .NET Framework reference assemblies via NuGet: lets the build resolve net47x/net48
+         from a restore, so only the .NET SDK is needed (no system-wide targeting pack). -->
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3">
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+    </ItemGroup>
+
 </Project>
