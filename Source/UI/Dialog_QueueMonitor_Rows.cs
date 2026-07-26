@@ -15,7 +15,8 @@ namespace RimSynapse.UI
         private void DrawRequestRow(Rect rect, RequestQueue.QueuedRequest req, string status)
         {
             float curX = rect.x;
-            string ageMs = (DateTime.UtcNow - req.EnqueuedAt).TotalMilliseconds.ToString("F0");
+            string queuedMs = GetQueuedTimeMs(req).ToString("F0");
+            string latencyMs = GetLatencyTimeMs(req).ToString("F0");
             string score = req.CurrentScore.ToString("F0");
             string timeout = req.Options?.maxWaitMs?.ToString() ?? "INF";
             string modName = req.Mod?.DisplayName ?? "Unknown";
@@ -27,10 +28,10 @@ namespace RimSynapse.UI
             string model = GetModelForRequest(req);
 
             var s = RimSynapseMod.Instance.Settings;
-            bool[] colsVisible = { s.qmShowPrio, s.qmShowMod, s.qmShowTarget, s.qmShowTask, s.qmShowAge, s.qmShowStatus, s.qmShowScore, s.qmShowTimeout, s.qmShowTokens, s.qmShowProvider, s.qmShowModel };
+            bool[] colsVisible = { s.qmShowPrio, s.qmShowMod, s.qmShowTarget, s.qmShowTask, s.qmShowQueued, s.qmShowLatency, s.qmShowStatus, s.qmShowScore, s.qmShowTimeout, s.qmShowTokens, s.qmShowProvider, s.qmShowModel };
 
-            string[] vals = { prio, modName, targetName, taskName, ageMs, status, score, timeout, tokens, provider, model };
-            for (int i = 0; i < 11; i++)
+            string[] vals = { prio, modName, targetName, taskName, queuedMs, latencyMs, status, score, timeout, tokens, provider, model };
+            for (int i = 0; i < 12; i++)
             {
                 if (!colsVisible[i]) continue;
                 Rect r = new Rect(curX, rect.y, mainWidths[i] - 4f, rect.height);
@@ -41,20 +42,20 @@ namespace RimSynapse.UI
 
             if (s.qmShowPrompt)
             {
-                Rect r = new Rect(curX, rect.y, mainWidths[11] - 4f, rect.height);
+                Rect r = new Rect(curX, rect.y, mainWidths[12] - 4f, rect.height);
                 string textDump = GetPayloadTextDump(req);
                 Widgets.Label(r, textDump);
-                Widgets.DrawLineVertical(curX + mainWidths[11], rect.y, rect.height);
-                curX += mainWidths[11];
+                Widgets.DrawLineVertical(curX + mainWidths[12], rect.y, rect.height);
+                curX += mainWidths[12];
             }
 
             if (s.qmShowResponse)
             {
-                Rect r = new Rect(curX, rect.y, mainWidths[12] - 4f, rect.height);
+                Rect r = new Rect(curX, rect.y, mainWidths[13] - 4f, rect.height);
                 string resultStr = req.Result != null ? (req.Result.success ? req.Result.content : req.Result.error) : "Pending...";
                 Widgets.Label(r, resultStr);
-                Widgets.DrawLineVertical(curX + mainWidths[12], rect.y, rect.height);
-                curX += mainWidths[12];
+                Widgets.DrawLineVertical(curX + mainWidths[13], rect.y, rect.height);
+                curX += mainWidths[13];
             }
             Widgets.DrawLineHorizontal(rect.x, rect.yMax, rect.width);
         }
@@ -184,6 +185,8 @@ namespace RimSynapse.UI
             if (routingId == RoutingId.LocalOnly)
             {
                 if (!string.IsNullOrEmpty(req.Options?.model)) return req.Options.model;
+                if (settings != null && settings.autoMapModel && !string.IsNullOrEmpty(ModelManager.ActiveModel))
+                    return ModelManager.ActiveModel;
                 return settings?.modelLocal ?? "Unknown";
             }
             

@@ -12,7 +12,7 @@ namespace RimSynapse.UI
         private Vector2 scrollPosition = Vector2.zero;
         // Toggles moved to RimSynapseSettings
 
-        private enum SortColumn { Score, Status, Mod, Prio, Age, Timeout, Task, Target, Tokens, Provider, Model }
+        private enum SortColumn { Score, Status, Mod, Prio, Queued, Latency, Timeout, Task, Target, Tokens, Provider, Model }
         private SortColumn mainSortColumn = SortColumn.Score;
         private bool mainSortAscending = false;
 
@@ -21,8 +21,8 @@ namespace RimSynapse.UI
         private bool oppSortAscending = false;
 
         // Resizable column state
-        // main: Prio, Mod, Target, Task, Age, Status, Score, Timeout, Tokens, Provider, Model, Prompt, Response
-        private float[] mainWidths = { 40f, 120f, 150f, 150f, 60f, 130f, 60f, 60f, 80f, 100f, 150f, 300f, 300f };
+        // main: Prio, Mod, Target, Task, Queued, Latency, Status, Score, Timeout, Tokens, Provider, Model, Prompt, Response
+        private float[] mainWidths = { 40f, 120f, 150f, 150f, 80f, 80f, 130f, 60f, 60f, 80f, 100f, 150f, 300f, 300f };
         private int draggingMainCol = -1;
         private float dragStartX = 0f;
         private float dragStartWidth = 0f;
@@ -80,7 +80,8 @@ namespace RimSynapse.UI
                     new FloatMenuOption($"Mod ({(s.qmShowMod ? "ON" : "OFF")})", () => s.qmShowMod = !s.qmShowMod),
                     new FloatMenuOption($"Target ({(s.qmShowTarget ? "ON" : "OFF")})", () => s.qmShowTarget = !s.qmShowTarget),
                     new FloatMenuOption($"Task ({(s.qmShowTask ? "ON" : "OFF")})", () => s.qmShowTask = !s.qmShowTask),
-                    new FloatMenuOption($"Age ({(s.qmShowAge ? "ON" : "OFF")})", () => s.qmShowAge = !s.qmShowAge),
+                    new FloatMenuOption($"Queued ({(s.qmShowQueued ? "ON" : "OFF")})", () => s.qmShowQueued = !s.qmShowQueued),
+                    new FloatMenuOption($"Latency ({(s.qmShowLatency ? "ON" : "OFF")})", () => s.qmShowLatency = !s.qmShowLatency),
                     new FloatMenuOption($"Status ({(s.qmShowStatus ? "ON" : "OFF")})", () => s.qmShowStatus = !s.qmShowStatus),
                     new FloatMenuOption($"Score ({(s.qmShowScore ? "ON" : "OFF")})", () => s.qmShowScore = !s.qmShowScore),
                     new FloatMenuOption($"Timeout ({(s.qmShowTimeout ? "ON" : "OFF")})", () => s.qmShowTimeout = !s.qmShowTimeout),
@@ -147,7 +148,8 @@ namespace RimSynapse.UI
             {
                 case SortColumn.Mod: sortedMain = mainSortAscending ? sortedMain.OrderBy(r => r.Mod?.DisplayName) : sortedMain.OrderByDescending(r => r.Mod?.DisplayName); break;
                 case SortColumn.Prio: sortedMain = mainSortAscending ? sortedMain.OrderBy(r => r.Priority) : sortedMain.OrderByDescending(r => r.Priority); break;
-                case SortColumn.Age: sortedMain = mainSortAscending ? sortedMain.OrderBy(r => r.EnqueuedAt) : sortedMain.OrderByDescending(r => r.EnqueuedAt); break;
+                case SortColumn.Queued: sortedMain = mainSortAscending ? sortedMain.OrderBy(r => GetQueuedTimeMs(r)) : sortedMain.OrderByDescending(r => GetQueuedTimeMs(r)); break;
+                case SortColumn.Latency: sortedMain = mainSortAscending ? sortedMain.OrderBy(r => GetLatencyTimeMs(r)) : sortedMain.OrderByDescending(r => GetLatencyTimeMs(r)); break;
                 case SortColumn.Timeout: sortedMain = mainSortAscending ? sortedMain.OrderBy(r => r.Options?.maxWaitMs ?? int.MaxValue) : sortedMain.OrderByDescending(r => r.Options?.maxWaitMs ?? int.MaxValue); break;
                 case SortColumn.Task: sortedMain = mainSortAscending ? sortedMain.OrderBy(r => r.Options?.requestName) : sortedMain.OrderByDescending(r => r.Options?.requestName); break;
                 case SortColumn.Target: sortedMain = mainSortAscending ? sortedMain.OrderBy(r => r.Options?.targetName) : sortedMain.OrderByDescending(r => r.Options?.targetName); break;
@@ -268,9 +270,9 @@ namespace RimSynapse.UI
         private float GetTotalMainWidth()
         {
             var s = RimSynapseMod.Instance.Settings;
-            bool[] colsVisible = { s.qmShowPrio, s.qmShowMod, s.qmShowTarget, s.qmShowTask, s.qmShowAge, s.qmShowStatus, s.qmShowScore, s.qmShowTimeout, s.qmShowTokens, s.qmShowProvider, s.qmShowModel, s.qmShowPrompt, s.qmShowResponse };
+            bool[] colsVisible = { s.qmShowPrio, s.qmShowMod, s.qmShowTarget, s.qmShowTask, s.qmShowQueued, s.qmShowLatency, s.qmShowStatus, s.qmShowScore, s.qmShowTimeout, s.qmShowTokens, s.qmShowProvider, s.qmShowModel, s.qmShowPrompt, s.qmShowResponse };
             float w = 0;
-            for (int i = 0; i < 13; i++) 
+            for (int i = 0; i < 14; i++) 
             {
                 if (colsVisible[i]) w += mainWidths[i];
             }
@@ -279,17 +281,17 @@ namespace RimSynapse.UI
 
         private void DrawMainHeader(Rect rect)
         {
-            SortColumn[] cols = { SortColumn.Prio, SortColumn.Mod, SortColumn.Target, SortColumn.Task, SortColumn.Age, SortColumn.Status, SortColumn.Score, SortColumn.Timeout, SortColumn.Tokens, SortColumn.Provider, SortColumn.Model };
-            string[] labels = { "PRIO", "MOD", "TARGET", "TASK", "AGE(ms)", "STATUS", "SCORE", "TIMEOUT", "TOKENS", "PROVIDER", "MODEL" };
+            SortColumn[] cols = { SortColumn.Prio, SortColumn.Mod, SortColumn.Target, SortColumn.Task, SortColumn.Queued, SortColumn.Latency, SortColumn.Status, SortColumn.Score, SortColumn.Timeout, SortColumn.Tokens, SortColumn.Provider, SortColumn.Model };
+            string[] labels = { "PRIO", "MOD", "TARGET", "TASK", "QUEUED(ms)", "LATENCY(ms)", "STATUS", "SCORE", "TIMEOUT", "TOKENS", "PROVIDER", "MODEL" };
             
             float curX = rect.x - scrollPosition.x;
             GUI.color = Color.gray;
 
             var s = RimSynapseMod.Instance.Settings;
-            bool[] colsVisible = { s.qmShowPrio, s.qmShowMod, s.qmShowTarget, s.qmShowTask, s.qmShowAge, s.qmShowStatus, s.qmShowScore, s.qmShowTimeout, s.qmShowTokens, s.qmShowProvider, s.qmShowModel };
+            bool[] colsVisible = { s.qmShowPrio, s.qmShowMod, s.qmShowTarget, s.qmShowTask, s.qmShowQueued, s.qmShowLatency, s.qmShowStatus, s.qmShowScore, s.qmShowTimeout, s.qmShowTokens, s.qmShowProvider, s.qmShowModel };
 
-            // Draw standard 11 columns
-            for (int i = 0; i < 11; i++)
+            // Draw standard 12 columns
+            for (int i = 0; i < 12; i++)
             {
                 if (!colsVisible[i]) continue;
                 Rect cellRect = new Rect(curX, rect.y, mainWidths[i], 25f);
@@ -322,27 +324,8 @@ namespace RimSynapse.UI
             // Optional Prompt column
             if (s.qmShowPrompt)
             {
-                Rect cellRect = new Rect(curX, rect.y, mainWidths[11], 25f);
-                Widgets.Label(cellRect, "PROMPT");
-                Rect splitter = new Rect(curX + mainWidths[11] - 2f, rect.y, 4f, 25f);
-                Widgets.DrawLineVertical(curX + mainWidths[11], rect.y, rect.height);
-                Widgets.DrawHighlightIfMouseover(splitter);
-                TooltipHandler.TipRegion(splitter, "Drag to resize");
-                if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && splitter.Contains(Event.current.mousePosition))
-                {
-                    draggingMainCol = 11;
-                    dragStartX = Event.current.mousePosition.x;
-                    dragStartWidth = mainWidths[11];
-                    Event.current.Use();
-                }
-                curX += mainWidths[11];
-            }
-
-            // Optional Response column
-            if (s.qmShowResponse)
-            {
                 Rect cellRect = new Rect(curX, rect.y, mainWidths[12], 25f);
-                Widgets.Label(cellRect, "RESPONSE");
+                Widgets.Label(cellRect, "PROMPT");
                 Rect splitter = new Rect(curX + mainWidths[12] - 2f, rect.y, 4f, 25f);
                 Widgets.DrawLineVertical(curX + mainWidths[12], rect.y, rect.height);
                 Widgets.DrawHighlightIfMouseover(splitter);
@@ -355,6 +338,25 @@ namespace RimSynapse.UI
                     Event.current.Use();
                 }
                 curX += mainWidths[12];
+            }
+
+            // Optional Response column
+            if (s.qmShowResponse)
+            {
+                Rect cellRect = new Rect(curX, rect.y, mainWidths[13], 25f);
+                Widgets.Label(cellRect, "RESPONSE");
+                Rect splitter = new Rect(curX + mainWidths[13] - 2f, rect.y, 4f, 25f);
+                Widgets.DrawLineVertical(curX + mainWidths[13], rect.y, rect.height);
+                Widgets.DrawHighlightIfMouseover(splitter);
+                TooltipHandler.TipRegion(splitter, "Drag to resize");
+                if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && splitter.Contains(Event.current.mousePosition))
+                {
+                    draggingMainCol = 13;
+                    dragStartX = Event.current.mousePosition.x;
+                    dragStartWidth = mainWidths[13];
+                    Event.current.Use();
+                }
+                curX += mainWidths[13];
             }
 
             GUI.color = Color.white;
@@ -395,6 +397,32 @@ namespace RimSynapse.UI
                 curX += oppWidths[i];
             }
             GUI.color = Color.white;
+        }
+
+        private double GetQueuedTimeMs(RequestQueue.QueuedRequest req)
+        {
+            if (req.DispatchedAt.HasValue)
+            {
+                return (req.DispatchedAt.Value - req.EnqueuedAt).TotalMilliseconds;
+            }
+            return (DateTime.UtcNow - req.EnqueuedAt).TotalMilliseconds;
+        }
+
+        private double GetLatencyTimeMs(RequestQueue.QueuedRequest req)
+        {
+            if (req.LlmLatencyMs.HasValue)
+            {
+                return req.LlmLatencyMs.Value;
+            }
+            if (req.DispatchedAt.HasValue)
+            {
+                if (RequestQueue.ActiveRequest == req)
+                {
+                    return RequestQueue.ActiveRequestStopwatch.ElapsedMilliseconds;
+                }
+                return (DateTime.UtcNow - req.DispatchedAt.Value).TotalMilliseconds;
+            }
+            return 0;
         }
 
     }

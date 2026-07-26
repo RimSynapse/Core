@@ -123,7 +123,12 @@ namespace RimSynapse.Utils
             else if (dayOfQuadrum % 10 == 2 && dayOfQuadrum != 12) daySuffix = "nd";
             else if (dayOfQuadrum % 10 == 3 && dayOfQuadrum != 13) daySuffix = "rd";
 
-            return $"{dayOfQuadrum}{daySuffix} of {quadrumLabel}, {year}";
+            long dayTicks = ticksRemainder % TicksPerDay;
+            if (dayTicks < 0) dayTicks += TicksPerDay;
+            int hour = (int)(dayTicks / 2500);
+            int minute = (int)((dayTicks % 2500) / 41.66667f);
+
+            return $"{dayOfQuadrum}{daySuffix} of {quadrumLabel}, {year} {hour:D2}:{minute:D2}";
         }
 
         /// <summary>

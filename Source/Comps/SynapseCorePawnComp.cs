@@ -25,8 +25,20 @@ namespace RimSynapse.Comps
         public Dictionary<string, float> thoughtSensitivities = new Dictionary<string, float>();
         public Dictionary<string, float> relationSensitivities = new Dictionary<string, float>();
 
+        // Grounding history tracking fields
+        public List<string> recentLocations = new List<string>();
+        public List<JobInterval> recentJobs = new List<JobInterval>();
+        public string lastJobDefName;
+        public int lastJobStartedTick = -1;
+        private int locationSampleCooldown = 5;
+        public bool isResident = false;
+        public int lastRecruitmentAttemptTick = -999999;
+
         private const int TickIntervalDay = 60000;
         private const int TickInterval6Hours = 15000;
+        
+        private int lastDecayTick = -1;
+        private int lastOpinionTick = -1;
 
         public override void PostExposeData()
         {
@@ -42,6 +54,17 @@ namespace RimSynapse.Comps
             Scribe_Collections.Look(ref thoughtSensitivities, "thoughtSensitivities", LookMode.Value, LookMode.Value);
             Scribe_Collections.Look(ref relationSensitivities, "relationSensitivities", LookMode.Value, LookMode.Value);
             
+            Scribe_Collections.Look(ref recentLocations, "recentLocations", LookMode.Value);
+            Scribe_Collections.Look(ref recentJobs, "recentJobs", LookMode.Deep);
+            Scribe_Values.Look(ref lastJobDefName, "lastJobDefName");
+            Scribe_Values.Look(ref lastJobStartedTick, "lastJobStartedTick", -1);
+            Scribe_Values.Look(ref locationSampleCooldown, "locationSampleCooldown", 5);
+            Scribe_Values.Look(ref isResident, "isResident", false);
+            Scribe_Values.Look(ref lastRecruitmentAttemptTick, "lastRecruitmentAttemptTick", -999999);
+
+            Scribe_Values.Look(ref lastDecayTick, "lastDecayTick", -1);
+            Scribe_Values.Look(ref lastOpinionTick, "lastOpinionTick", -1);
+            
             if (Scribe.mode == LoadSaveMode.LoadingVars)
             {
                 if (memories == null) memories = new List<WeightedMemory>();
@@ -49,6 +72,8 @@ namespace RimSynapse.Comps
                 if (llmTraits == null) llmTraits = new List<string>();
                 if (thoughtSensitivities == null) thoughtSensitivities = new Dictionary<string, float>();
                 if (relationSensitivities == null) relationSensitivities = new Dictionary<string, float>();
+                if (recentLocations == null) recentLocations = new List<string>();
+                if (recentJobs == null) recentJobs = new List<JobInterval>();
             }
             
             // Migrate old gameTick-only memories to absTick
@@ -68,16 +93,84 @@ namespace RimSynapse.Comps
             
             if (parent is Pawn pawn && pawn.Spawned && !pawn.Dead)
             {
-                // Memory decay once per day
-                if (pawn.IsHashIntervalTick(TickIntervalDay))
+                int currentTick = Find.TickManager.TicksGame;
+
+                // Track job activity/durations rare-tick (every 250 ticks)
+                TrackJobRare(pawn, currentTick);
+
+                // Sample location every 1250 ticks (5 rare ticks)
+                locationSampleCooldown--;
+                if (locationSampleCooldown <= 0)
                 {
+                    locationSampleCooldown = 5;
+                    SampleLocationRare(pawn);
+                }
+
+                // Memory decay once per day
+                if (lastDecayTick == -1)
+                {
+                    lastDecayTick = currentTick;
+                }
+                else if (currentTick - lastDecayTick >= TickIntervalDay)
+                {
+                    lastDecayTick = currentTick;
                     DoMemoryDecay();
                 }
 
                 // Sample opinions periodically (e.g. every 6 in-game hours)
-                if (pawn.IsHashIntervalTick(TickInterval6Hours))
+                if (lastOpinionTick == -1)
                 {
+                    lastOpinionTick = currentTick;
+                }
+                else if (currentTick - lastOpinionTick >= TickInterval6Hours)
+                {
+                    lastOpinionTick = currentTick;
                     SampleOpinions(pawn);
+                }
+
+                // Simulated cooking for resident NPC pawns
+                if (isResident && pawn.inventory != null)
+                {
+                    bool hasMeals = false;
+                    foreach (var item in pawn.inventory.innerContainer)
+                    {
+                        if (item.def.IsNutritionGivingIngestible && item.def.ingestible.preferability >= FoodPreferability.MealSimple)
+                        {
+                            hasMeals = true;
+                            break;
+                        }
+                    }
+
+                    if (!hasMeals)
+                    {
+                        // Look for a campfire or stove nearby (radial 12 cells)
+                        bool hasCookingFacility = false;
+                        foreach (var c in GenRadial.RadialCellsAround(pawn.Position, 12f, true))
+                        {
+                            if (c.InBounds(pawn.Map))
+                            {
+                                var things = c.GetThingList(pawn.Map);
+                                foreach (var t in things)
+                                {
+                                    if (t.def == ThingDefOf.Campfire || t.def.defName.Contains("Stove") || t.def.defName.Contains("Cooker"))
+                                    {
+                                        hasCookingFacility = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (hasCookingFacility) break;
+                        }
+
+                        if (hasCookingFacility)
+                        {
+                            // Spawn simple meal in inventory
+                            Thing meal = ThingMaker.MakeThing(ThingDefOf.MealSimple);
+                            meal.stackCount = 1;
+                            pawn.inventory.innerContainer.TryAdd(meal);
+                            RimSynapse.SynapseLogger.Info("core", $"[Resident Cooking] {pawn.Name?.ToStringShort ?? pawn.Label} simulated cooking a Simple Meal near a cooking facility.");
+                        }
+                    }
                 }
             }
         }
@@ -286,6 +379,159 @@ namespace RimSynapse.Comps
                 return list;
             }
             return new List<WeightedMemory>();
+        }
+
+        private void TrackJobRare(Pawn pawn, int currentTick)
+        {
+            string currentJobDefName = "idle";
+            if (pawn.CurJob != null && pawn.CurJob.def != null)
+            {
+                currentJobDefName = pawn.CurJob.def.defName;
+            }
+
+            if (lastJobStartedTick == -1)
+            {
+                lastJobStartedTick = currentTick;
+                lastJobDefName = currentJobDefName;
+                return;
+            }
+
+            if (lastJobDefName != currentJobDefName)
+            {
+                int duration = currentTick - lastJobStartedTick;
+                if (duration > 0 && lastJobDefName != null)
+                {
+                    recentJobs.Add(new JobInterval(lastJobDefName, lastJobStartedTick, duration));
+                }
+
+                lastJobDefName = currentJobDefName;
+                lastJobStartedTick = currentTick;
+
+                // Clean up intervals older than 24 hours (60,000 ticks)
+                recentJobs.RemoveAll(j => (currentTick - (j.startTick + j.durationTicks)) > 60000);
+            }
+        }
+
+        private void SampleLocationRare(Pawn pawn)
+        {
+            string loc = "outdoors";
+            var room = pawn.Position.GetRoom(pawn.Map);
+            if (room != null && !room.PsychologicallyOutdoors)
+            {
+                loc = room.Role?.label ?? room.Role?.defName ?? "indoors";
+            }
+
+            recentLocations.Add(loc);
+            if (recentLocations.Count > 48) // Keep 24 hours of samples
+            {
+                recentLocations.RemoveAt(0);
+            }
+        }
+
+        public string GetRecentLocationsSummary()
+        {
+            if (recentLocations == null || recentLocations.Count == 0)
+            {
+                return "outdoors (100%)";
+            }
+
+            var counts = new Dictionary<string, int>();
+            foreach (var loc in recentLocations)
+            {
+                if (!counts.ContainsKey(loc)) counts[loc] = 0;
+                counts[loc]++;
+            }
+
+            var sorted = counts.OrderByDescending(kvp => kvp.Value).ToList();
+            var parts = new List<string>();
+            foreach (var kvp in sorted)
+            {
+                float pct = (float)kvp.Value / recentLocations.Count;
+                parts.Add($"{kvp.Key} ({pct.ToStringPercent()})");
+            }
+
+            return string.Join(", ", parts);
+        }
+
+        public string GetRecentJobsSummary()
+        {
+            int currentTick = Find.TickManager.TicksGame;
+            // Clean up intervals older than 24 hours (60,000 ticks)
+            recentJobs.RemoveAll(j => (currentTick - (j.startTick + j.durationTicks)) > 60000);
+
+            // Accumulate durations
+            var accumulated = new Dictionary<string, int>();
+            int totalDuration = 0;
+
+            foreach (var interval in recentJobs)
+            {
+                if (!accumulated.ContainsKey(interval.jobDefName)) accumulated[interval.jobDefName] = 0;
+                accumulated[interval.jobDefName] += interval.durationTicks;
+                totalDuration += interval.durationTicks;
+            }
+
+            // Include current job's ongoing duration
+            if (lastJobDefName != null && lastJobStartedTick != -1)
+            {
+                int ongoingDuration = currentTick - lastJobStartedTick;
+                if (ongoingDuration > 0)
+                {
+                    if (!accumulated.ContainsKey(lastJobDefName)) accumulated[lastJobDefName] = 0;
+                    accumulated[lastJobDefName] += ongoingDuration;
+                    totalDuration += ongoingDuration;
+                }
+            }
+
+            if (totalDuration == 0)
+            {
+                return "idle (100%)";
+            }
+
+            // Group by human-readable JobDef labels where possible
+            var labelAccumulated = new Dictionary<string, int>();
+            foreach (var kvp in accumulated)
+            {
+                var jobDef = DefDatabase<JobDef>.GetNamed(kvp.Key, false);
+                string label = jobDef?.label ?? kvp.Key;
+                if (!labelAccumulated.ContainsKey(label)) labelAccumulated[label] = 0;
+                labelAccumulated[label] += kvp.Value;
+            }
+
+            var sorted = labelAccumulated.OrderByDescending(kvp => kvp.Value).ToList();
+            var parts = new List<string>();
+            foreach (var kvp in sorted)
+            {
+                float pct = (float)kvp.Value / totalDuration;
+                parts.Add($"{kvp.Key} ({pct.ToStringPercent()})");
+            }
+
+            return string.Join(", ", parts);
+        }
+    }
+
+    /// <summary>
+    /// Stores a duration segment spent on a specific job.
+    /// </summary>
+    public class JobInterval : IExposable
+    {
+        public string jobDefName;
+        public int startTick;
+        public int durationTicks;
+
+        public JobInterval() {}
+
+        public JobInterval(string jobDefName, int startTick, int durationTicks)
+        {
+            this.jobDefName = jobDefName;
+            this.startTick = startTick;
+            this.durationTicks = durationTicks;
+        }
+
+        public void ExposeData()
+        {
+            Scribe_Values.Look(ref jobDefName, "jobDefName");
+            Scribe_Values.Look(ref startTick, "startTick");
+            Scribe_Values.Look(ref durationTicks, "durationTicks");
         }
     }
 }

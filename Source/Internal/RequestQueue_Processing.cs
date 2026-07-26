@@ -40,6 +40,11 @@ namespace RimSynapse.Internal
             }
             catch (Exception ex)
             {
+                requestToProcess.CompletedAt = DateTime.UtcNow;
+                if (requestToProcess.DispatchedAt.HasValue)
+                {
+                    requestToProcess.LlmLatencyMs = (long)(DateTime.UtcNow - requestToProcess.DispatchedAt.Value).TotalMilliseconds;
+                }
                 SynapseLogger.Error($"Queue worker error: {ex.Message}");
                 if (SessionId == currentSession)
                 {
@@ -244,6 +249,9 @@ namespace RimSynapse.Internal
                 errorMsg = audResult.error;
                 contentPreview = "[Audio Base64]";
             }
+
+            req.LlmLatencyMs = durationMs;
+            req.CompletedAt = DateTime.UtcNow;
 
             SynapseLogger.Message($"Completed LLM {req.CapabilityType} request for {req.Mod?.DisplayName ?? "unknown"} in {durationMs}ms. (Success: {success})", req.Mod?.ModId);
 

@@ -1,63 +1,58 @@
+[b]Discord Community:[/b] [url=https://discord.gg/eVBebZ2N9s]https://discord.gg/eVBebZ2N9s[/url]
+[b]Version:[/b] v0.5.2 (Target: RimWorld 1.6)
+
 [h1]RimSynapse - Core[/h1]
-[b]📚 [url=https://github.com/RimSynapse/Core/wiki]Official Wiki and Documentation[/url][/b]
+[b]The foundational Large Language Model (LLM) connector and narrative intelligence engine for RimWorld.[/b]
 
-[b]The foundational LLM Connector for RimWorld.[/b]
+RimSynapse Core is a powerful, asynchronous background engine that natively connects RimWorld to local Large Language Models (LLMs). It acts as the central brain of the RimSynapse ecosystem, automatically intercepting vanilla game events and orchestrating them into rich, cohesive story arcs.
 
-RimSynapse Core is a powerful, asynchronous background engine that natively brings narrative intelligence to RimWorld. It acts as the central brain of the RimSynapse ecosystem, intercepting vanilla events and directly altering the narrative tone of your game through its built-in storytelling mechanics, while also serving as the essential bridge required by all companion modules.
-
-[h2]Meet Aura (The AI Storyteller!)[/h2]
-Originally the star of the deprecated StoryTeller module, Aura is now baked directly into Core as your spunky, AI-driven game director! She constantly evaluates the overarching narrative "aura" or tone of your colony (Tragic, Tense, Triumphant, etc.) based on recent events. With her own vibrant, LLM-generated personality, she subconsciously guides every interaction and directly influences how standard game events (raids, quests, drop pods) are generated and contextualized. Your colony's successes and failures directly shape her mood, and she isn't afraid to dynamically shift the story based on how she feels about your progress!
-
-[b]Note:[/b] You must select Aura as your storyteller in-game for the LLM to natively intercept and adjust standard game events!
-
-[h2]Features[/h2]
+[h2]Key Features[/h2]
 [list]
-[*] [b]Universal AI Connectors:[/b] With version 0.4.0, RimSynapse is THE universal AI connector for RimWorld! It natively connects to top-tier cloud models including [b]Anthropic Claude[/b], [b]Google Gemini[/b], and [b]OpenAI[/b], alongside built-in free image generation via [b]Pollinations.ai[/b] and text-to-speech from [b]ElevenLabs[/b].
-[*] [b]Local Backend Support:[/b] Prefer to keep it local? RimSynapse still provides seamless integration with [url=https://lmstudio.ai]LM Studio[/url], Ollama, or any OpenAI-compatible local API for 100% free, offline AI generation.
+[*] [b]LLM Direct Action Console (Command in Plain English!):[/b] Control the game world using natural language! Open the Direct Action Console, type what you want in plain English (e.g. [i]"Make Fred have 20 Shooting, remove the Bipolar trait from Sarah, and start a fire on the solar generator"[/i]), and watch the Storyteller LLM act as an active agent, translating your request into native in-game tool calls and executing them in real-time!
+[*] [b]Universal Backend Support:[/b] Connects natively to LM Studio, Ollama, or any OpenAI-compatible local API (e.g. OpenRouter, LocalAI) without complex setups.
 [*] [b]Background Threading:[/b] Never drops a frame. All LLM requests are queued, processed, and sanitized asynchronously on separate threads.
 [*] [b]Dynamic Priority Queue:[/b] Intelligently manages hundreds of requests with an advanced Linux-style top-monitor queue system, prioritizing critical events and starving obsolete prompts.
-[*] [b]Auto-Discovery:[/b] Automatically detects your active models and manages keep-alive pings to ensure your LLMs don't sleep when you need them.
-[*] [b]GPU Monitoring:[/b] Built-in framework to keep track of local VRAM and processing overhead.
-[*] [b]Event Tracking Ledger:[/b] Maintains a rolling, serializable backlog of major colony events. Core automatically snapshots the colony's wealth, nutrition, and every colonist's mood/health at the exact tick the event occurred, providing perfect chronological context to the LLM.
-[*] [b]Native Event Interception:[/b] Automatically captures major vanilla game events (marriages, legendary crafts, pawn deaths) via Harmony patches. It also natively intercepts standard storytelling events, raids, and quests to generate rich, contextual, multi-stage narratives via the LLM.
-[*] [b]Faction Perception Tracking:[/b] Each faction maintains subjective "Perceived Wealth" and "Perceived Strength" values for your colony, updated only through direct contact (visitors, traders, caravans).
+[*] [b]Auto-Discovery and Keep-Alive:[/b] Automatically detects active models and manages keep-alive pings to ensure your LLMs don't go to sleep.
+[*] [b]Event Tracking Ledger:[/b] Snapshots colony wealth, nutrition, and colonist status chronologically when events trigger, feeding the AI perfect narrative context.
+[*] [b]Faction Perception Tracking:[/b] Factions dynamically adjust their subjective perception of your wealth and strength through visits and trade.
+[*] [b]Colony Snapshots:[/b] Captures snapshots of the colony's mood, health, and stats when events occur to provide rich context.
 [*] [b]Memory Infrastructure:[/b] Provides the per-pawn memory bank, weighted tag system, and decay engine used by companion mods to give colonists persistent, evolving memories.
-[*] [b]Colony Snapshots:[/b] When events occur, the framework captures a snapshot of the colony's wealth, nutrition, and pawn status, providing rich context for AI-generated responses.
 [*] [b]Opportunistic Task Scheduling:[/b] A background task manager that feeds low-priority LLM requests (backstory generation, memory creation) into idle GPU cycles without impacting gameplay performance.
 [/list]
 
-[h2]A Personal Note[/h2]
-AI is incredibly cool, and having a framework to utilize powerful, no-cost local models really appealed to me. RimWorld is relatively light on GPU overhead, making it the absolute perfect candidate to max out those graphics cards by running a local LLM in the background. My goal with RimSynapse is to push the boundaries of emergent storytelling using the hardware you already own.
+---
 
-[h2]Changelog[/h2]
-[b]v0.4.0[/b]
-- The Connector Update! Huge expansion to AI backends.
-- Added native connectors for OpenAI, Google Gemini, Anthropic Claude, and ElevenLabs.
-- Integrated Pollinations.ai for 100% free, zero-setup image generation!
-- Multi-provider load balancing and fallback routing.
-[b]v0.3.0[/b]
-- Embedded Aura the storyteller into core
-- Ecosystem Expansion (Introduced Chat, Factions, and WorldNews companion modules)
-[b]v0.2.1[/b]
-- Bug fixes and stability improvements
-[b]v0.2.0[/b]
-- Storyteller Update (Added the AI Storyteller module, now merged into Core)
-[b]v0.1.0[/b]
-- Initial Release (Core framework, NVIDIA Tool, and Psychology module)
-
-[h2]Roadmap and Future Goals[/h2]
-The initial roadmap for RimSynapse is now complete! Future updates will focus on maintaining the core framework and expanding functionality to allow other modders to build on top of it.
-
-[h2]For Developers and Open Source[/h2]
-RimSynapse is an open-source framework designed to be easily hooked into by other modders. I highly encourage you to read the framework documentation and build your own LLM-driven mods!
+[h2]Roadmap[/h2]
 [list]
-[*] [url=https://github.com/RimSynapse/Core]RimSynapse - Core Source and Docs[/url]
-[*] [url=https://github.com/RimSynapse/Psychology]RimSynapse - Psychology Source[/url]
-[*] [url=https://github.com/RimSynapse/RimSynapse-Chat]RimSynapse - Chat Source[/url]
-[*] [url=https://github.com/RimSynapse/Factions]RimSynapse - Factions Source[/url]
-[*] [url=https://github.com/RimSynapse/WorldNews]RimSynapse - WorldNews Source[/url]
-[*] [url=https://github.com/RimSynapse/NVIDIA-Tool]RimSynapse - NVIDIA Tool Source[/url]
+[*] [b]0.6 - Agent and Tool Foundation:[/b] An in-game agent that plans and carries out multi-step actions on its own, backed by a growing library of tools it can query for colony, faction and world state.
+[*] [b]0.7 - Logic Externalization:[/b] Retiring hardcoded thresholds so the storyteller reasons about your colony's situation instead of following fixed rules.
+[*] [b]0.8 - Emergent Systems and Content:[/b] Faction archetypes for each DLC, caravans that travel the world map, settlement crises, faction capitals and travelling leaders, and richer colonist social dynamics.
 [/list]
+These ship when they are ready - no dates.
+
+---
+
+[h2]Changelog (v0.5.2)[/h2]
+[list]
+[*] [b]FIXED - Core failed to load:[/b] A Harmony patch bound the wrong parameter name on the game's knowledge database, which threw while patching and stopped RimSynapse Core initialising at all.
+[*] [b]FIXED - Learning Helper crash:[/b] Wiki guides added to RimWorld's Learning Helper threw an exception every frame. Guide names are now valid identifiers and duplicates are skipped.
+[*] [b]FIXED - Developer scripting paths:[/b] The developer file channel pointed at one machine's hard-coded drive, so it silently did nothing anywhere else. It now follows your install.
+[*] [b]Licence:[/b] Now PolyForm Noncommercial 1.0.0. Free to use, modify and share for any noncommercial purpose.
+[/list]
+
+---
+
+[h2]Changelog (v0.5.1)[/h2]
+[list]
+[*] [b]NEW: API-Level Thinking Controls:[/b] Support for OpenAI/LM Studio reasoning and thinking tokens configuration in mod options.
+[*] [b]NEW: Historical Records and Letter Archival:[/b] Automatically generates "Colony Established" and "Colony Named" ceremony event records and sends letter alerts.
+[*] [b]NEW: Stele Links stored in Core:[/b] Moved Stele Link monument bindings and colony ceremony logs to `SynapseCoreWorldComponent` for unified tracking.
+[*] [b]NEW: Resident Life Support:[/b] Resident pawns will cook simple meals in their inventories near heat sources if low on food.
+[*] [b]Pawn-level Job Tracking:[/b] Relocated job and location tracking to per-pawn `SynapseCorePawnComp` (`CompTickRare`) to optimize CPU usage.
+[*] [b]Idle Backstory memory queueing:[/b] Resident pawns are flagged as high-priority, queueing backstory generation in background cycles.
+[/list]
+
+---
 
 [h2]Compatibility Matrix[/h2]
 [list]
@@ -65,14 +60,26 @@ RimSynapse is an open-source framework designed to be easily hooked into by othe
 [*] [b]Ideology DLC:[/b] Compatible and Optional. Integrates precepts, rituals, and conversions if active. Reframes quests as holy crusades and divine visions.
 [*] [b]Biotech DLC:[/b] Compatible and Optional. Integrates xenotypes, mechinators, and genetic history if active. Describes mechanitor threats as cold satellite broadcasts.
 [*] [b]Anomaly DLC:[/b] Compatible and Optional. Integrates entity encounters and void studies if active. Translates events into chilling whispers and void phenomena.
+[*] [b]Odyssey DLC:[/b] Fully Compatible and Optimized. Handles space/orbital-aware narrative integrations.
 [/list]
 
-[h2]Requirements[/h2]
+---
+
+[h2]Requirements and Setup[/h2]
 [list]
-[*] [b]Harmony[/b] is required.
-[*] [b]An AI Backend:[/b] You can use a local LLM server (like LM Studio or Ollama) for free, private generation, OR use your API keys for powerful cloud providers like OpenAI, Google Gemini, Anthropic Claude, and ElevenLabs!
+[*] Harmony
+[*] A local LLM server (like LM Studio or Ollama). We recommend 8B+ parameter models.
+[*] [b]IMPORTANT: Reasoning Models (DeepSeek-R1, Gemma-QAT, etc.):[/b] These models generate internal "chain-of-thought" (reasoning) tokens before outputting the final response. This can add significant latency (30-40 seconds per request) on local setups.
+[list]
+[*] [b]To disable thinking in LM Studio:[/b] Go to the "My Models" tab, select your active model, and in the right-hand "Inference Settings" panel, toggle "Enable Thinking" to OFF.
+[*] [b]To disable thinking in Ollama and vLLM:[/b] Check the "Disable thinking/reasoning" option under RimSynapse Core settings in-game.
+[*] For the fastest, instant responses (2-3 seconds), we recommend using standard non-reasoning "Instruct" models (such as gemma-2-9b-it or llama-3-8b-instruct).
+[/list]
 [/list]
 
-[h2]Support the Project[/h2]
-If you enjoy this framework and want to support the development of genuine AI-driven gameplay, consider buying me a coffee!
-[url=https://buymeacoffee.com/archdukejim]☕ Buy me a coffee[/url]
+---
+
+[h2]Source Code and Support[/h2]
+GitHub: [url]https://github.com/RimSynapse/Core[/url]
+Licence: [url=https://polyformproject.org/licenses/noncommercial/1.0.0/]PolyForm Noncommercial License 1.0.0[/url] - free for any noncommercial use.
+Buy me a coffee: [url]https://buymeacoffee.com/archdukejim[/url]

@@ -86,6 +86,20 @@ namespace RimSynapse.Internal.Providers
                     if (request.MaxTokens.HasValue) body["max_tokens"] = request.MaxTokens.Value;
                     if (request.Temperature.HasValue) body["temperature"] = request.Temperature.Value;
                     
+                    if (request.DisableThinking)
+                    {
+                        // Standard parameters for disabling thinking across newer engines
+                        body["thinking"] = false; // vLLM / Llama.cpp
+                        body["think"] = false;    // Ollama
+                        
+                        // Instruct standard prompt templates to skip thinking via Jinja chat template arguments
+                        var chatTemplateKwargs = new JObject
+                        {
+                            ["enable_thinking"] = false
+                        };
+                        body["chat_template_kwargs"] = chatTemplateKwargs;
+                    }
+
                     if (request.EnforceJson && !omitResponseFormat)
                     {
                         body["response_format"] = new JObject { ["type"] = "json_object" };
@@ -124,7 +138,8 @@ namespace RimSynapse.Internal.Providers
                     }
 
                     long startMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+                    int timeoutSec = RimSynapseMod.Instance?.Settings != null ? RimSynapseMod.Instance.Settings.timeoutSeconds : 120;
+                    var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec));
                     
                     var response = _client.SendAsync(req, cts.Token).Result;
                     string responseBody = response.Content.ReadAsStringAsync().Result;
@@ -235,7 +250,8 @@ namespace RimSynapse.Internal.Providers
                 }
 
                 long startMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+                int timeoutSec = RimSynapseMod.Instance?.Settings != null ? RimSynapseMod.Instance.Settings.timeoutSeconds : 120;
+                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec));
                 
                 var response = _client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token).Result;
                 

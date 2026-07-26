@@ -101,7 +101,17 @@ namespace RimSynapse
                 return;
             }
 
-            var req = new LlmTextRequest { Messages = messages, SystemPrompt = "", EnforceJson = false };
+            var req = new LlmTextRequest 
+            { 
+                Messages = messages, 
+                SystemPrompt = "", 
+                EnforceJson = false,
+                MaxTokens = options?.maxTokens,
+                Temperature = options?.temperature,
+                DisableThinking = options?.thinking.HasValue == true 
+                    ? !options.thinking.Value 
+                    : RimSynapseMod.Instance.Settings.disableThinking
+            };
             RequestQueue.Enqueue(mod, req, LlmCapabilities.Text, options ?? ChatOptions.Default, callback);
         }
 

@@ -22,6 +22,31 @@ namespace RimSynapse.Patches
             var coreComp = Find.World.GetComponent<SynapseCoreWorldComponent>();
             if (coreComp == null) return;
 
+            // Check for resident pawn death
+            var pComp = __instance.TryGetComp<RimSynapse.Comps.SynapseCorePawnComp>();
+            if (pComp != null && pComp.isResident && __instance.Map != null && __instance.Faction != null)
+            {
+                var faction = __instance.Faction;
+                var map = __instance.Map;
+
+                bool otherResidentAlive = map.mapPawns.AllPawns
+                    .Any(p => p != __instance && p.Faction == faction && p.RaceProps.Humanlike && !p.Dead && p.TryGetComp<RimSynapse.Comps.SynapseCorePawnComp>()?.isResident == true);
+
+                if (!otherResidentAlive)
+                {
+                    var thingsToClear = map.listerThings.AllThings
+                        .Where(t => t.Faction == faction)
+                        .ToList();
+                    
+                    foreach (var t in thingsToClear)
+                    {
+                        t.SetFaction(null);
+                    }
+                    
+                    Messages.Message($"The residents of {faction.Name} on this map have all died or been recruited. Their property is now unclaimed.", MessageTypeDefOf.NeutralEvent, true);
+                }
+            }
+
             bool isColonist = __instance.IsColonist;
             bool isPrisoner = __instance.IsPrisonerOfColony;
             bool isHostile = __instance.HostileTo(Faction.OfPlayer);

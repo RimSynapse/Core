@@ -14,11 +14,20 @@ A C# library mod for RimWorld that provides a clean API for other mods to make l
 - **GPU Framework** — Data structures for GPU monitoring (polling provided by separate mod)
 - **Debug Logging** — Structured logging with subscribable events
 
-## Requirements
+## Requirements and Setup
 
 - [RimWorld 1.5](https://store.steampowered.com/app/294100/RimWorld/)
 - [Harmony](https://steamcommunity.com/workshop/filedetails/?id=2009463077)
-- [LM Studio](https://lmstudio.ai/) running locally with a model loaded
+- [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/) running locally with a model loaded (8B+ parameter models recommended)
+
+### ⚠️ IMPORTANT: Reasoning/Thinking Models (DeepSeek-R1, Gemma-QAT, etc.)
+If you use a reasoning model, it will generate a long internal "chain-of-thought" (reasoning) process before returning the final text. This can add **30-40 seconds of latency** per query on local setups.
+*   **To disable thinking in LM Studio:** Go to the **My Models** tab, select your active model, and in the right-hand **Inference Settings** panel, toggle **Enable Thinking** to **OFF**.
+
+    ![LM Studio Enable Thinking Toggle](About/enable-thinking.png)
+
+*   **To disable thinking in Ollama and vLLM:** Check the **"Disable thinking/reasoning"** checkbox under the in-game RimSynapse Core mod settings.
+*   **Recommendation:** For the fastest, instant responses (2-3 seconds), we recommend using standard non-reasoning **"Instruct"** models (such as `gemma-2-9b-it` or `llama-3-8b-instruct`).
 
 ## Quick Start for Mod Developers
 
@@ -112,4 +121,5 @@ In-game: **Options → Mod Settings → RimSynapse Core**
 
 ## License
 
-MIT
+[PolyForm Noncommercial License 1.0.0](LICENSE) — free to use, modify, and
+redistribute for any noncommercial purpose. Commercial/paid use is not permitted.

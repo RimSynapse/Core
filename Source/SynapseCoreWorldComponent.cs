@@ -12,6 +12,9 @@ namespace RimSynapse
         public List<NarrativeThread> narrativeThreads = new List<NarrativeThread>();
         public List<FactionRelationshipTracker> factionTrackers = new List<FactionRelationshipTracker>();
         public List<ShortTermEvent> shortTermEvents = new List<ShortTermEvent>();
+        public List<PawnEventRecord> pawnEventRecords = new List<PawnEventRecord>();
+        public Dictionary<string, string> steleEventLinks = new Dictionary<string, string>();
+        public bool colonyStartGenerated = false;
         
         public List<PastEvent> backlogQueueList = new List<PastEvent>();
         private Queue<PastEvent> _backlogQueue = new Queue<PastEvent>();
@@ -62,6 +65,9 @@ namespace RimSynapse
             Scribe_Collections.Look(ref shortTermEvents, "shortTermEvents", LookMode.Deep);
             Scribe_Collections.Look(ref backlogQueueList, "backlogQueueList", LookMode.Deep);
             Scribe_Collections.Look(ref firedIncidentHistory, "firedIncidentHistory", LookMode.Deep);
+            Scribe_Collections.Look(ref pawnEventRecords, "pawnEventRecords", LookMode.Deep);
+            Scribe_Collections.Look(ref steleEventLinks, "steleEventLinks", LookMode.Value, LookMode.Value);
+            Scribe_Values.Look(ref colonyStartGenerated, "colonyStartGenerated", false);
 
             // Storyteller properties
             Scribe_Collections.Look(ref categoryMultipliers, "categoryMultipliers", LookMode.Value, LookMode.Value);
@@ -95,6 +101,8 @@ namespace RimSynapse
                 if (backlogQueueList == null) backlogQueueList = new List<PastEvent>();
                 if (firedIncidentHistory == null) firedIncidentHistory = new List<FiredIncidentRecord>();
                 if (wealthHistory == null) wealthHistory = new List<WealthRecord>();
+                if (pawnEventRecords == null) pawnEventRecords = new List<PawnEventRecord>();
+                if (steleEventLinks == null) steleEventLinks = new Dictionary<string, string>();
                 
                 if (categoryMultipliers == null) categoryMultipliers = new Dictionary<string, float>();
                 if (incidentMultipliers == null) incidentMultipliers = new Dictionary<string, float>();
@@ -139,6 +147,13 @@ namespace RimSynapse
             if (currentTick % 60000 == 45000)
             {
                 CheckWealthGrowthPacing();
+            }
+
+            // Check for new game colony start generation
+            if (!colonyStartGenerated && currentTick >= 200)
+            {
+                colonyStartGenerated = true;
+                GenerateColonyStartEventRecord();
             }
         }
 
@@ -499,6 +514,65 @@ namespace RimSynapse
             }
 
             return score;
+        }
+
+
+
+        private void GenerateColonyStartEventRecord()
+        {
+            try
+            {
+                var colonists = new List<Pawn>();
+                if (Find.Maps != null)
+                {
+                    foreach (var map in Find.Maps)
+                    {
+                        if (map?.mapPawns?.FreeColonists != null)
+                        {
+                            colonists.AddRange(map.mapPawns.FreeColonists);
+                        }
+                    }
+                }
+
+                if (colonists.Count == 0) return;
+
+                string scenarioName = Find.Scenario?.name ?? "Scenario Start";
+                string dateStr = RimWorld.GenDate.DateFullStringAt(Find.TickManager.TicksAbs, Find.WorldGrid.LongLatOf(colonists[0].Tile));
+
+                // Generate a description/log of the colony start
+                string colonistListStr = string.Join("\n", colonists.Select(p => $" - {p.Name?.ToStringFull ?? p.Label}, the {p.story?.Title ?? "Colonist"}"));
+
+                // Build a nice, formatted log text
+                string startLog = $"The colony began on this historic day under the '{scenarioName}' scenario.\n\n" +
+                                 $"The following pioneers crashlanded or arrived to establish the settlement:\n" +
+                                 $"{colonistListStr}\n\n" +
+                                 $"With nothing but a few basic supplies and their determination, they stepped onto the soil to face the unknown dangers and build a new home together.";
+
+                // Generate a historical event record!
+                string eventId = "ColonyStart_" + System.Guid.NewGuid().ToString();
+                var record = new PawnEventRecord(
+                    eventId,
+                    "Colony Established",
+                    dateStr,
+                    "Colony",
+                    startLog
+                );
+
+                pawnEventRecords.Add(record);
+                RimSynapse.SynapseLogger.Info("core", $"[RimSynapse] Successfully generated Colony Start event record: {eventId}");
+
+                // Send a letter to notify the player and save it into the game's historical letter history
+                Find.LetterStack.ReceiveLetter(
+                    "Colony Established",
+                    startLog,
+                    LetterDefOf.PositiveEvent,
+                    colonists
+                );
+            }
+            catch (System.Exception ex)
+            {
+                RimSynapse.SynapseLogger.Warn("core", $"Failed to generate Colony Start event record: {ex.Message}");
+            }
         }
 
     }

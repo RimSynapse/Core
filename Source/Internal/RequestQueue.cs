@@ -34,7 +34,9 @@ namespace RimSynapse.Internal
             
             // History tracking
             public ChatResult Result;
+            public DateTime? DispatchedAt;
             public DateTime? CompletedAt;
+            public long? LlmLatencyMs;
         }
 
         private static readonly List<QueuedRequest> _queue = new List<QueuedRequest>();
@@ -174,6 +176,13 @@ namespace RimSynapse.Internal
         internal static void Enqueue(SynapseModHandle mod, object payload, LlmCapabilities capability, 
             ChatOptions options, Delegate callback)
         {
+            if (payload is LlmTextRequest textReq)
+            {
+                textReq.DisableThinking = options?.thinking.HasValue == true
+                    ? !options.thinking.Value
+                    : (RimSynapseMod.Instance?.Settings != null && RimSynapseMod.Instance.Settings.disableThinking);
+            }
+
             var request = new QueuedRequest
             {
                 Mod = mod,
@@ -339,6 +348,7 @@ namespace RimSynapse.Internal
                 // Execute in parallel
                 IsProcessing = true;
                 ActiveRequest = requestToProcess;
+                requestToProcess.DispatchedAt = DateTime.UtcNow;
                 ActiveRequestStopwatch.Restart();
 
                 Interlocked.Increment(ref _activeRequests);
