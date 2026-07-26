@@ -345,6 +345,14 @@ namespace RimSynapse
 
             _logCallback?.Invoke($"[API Agent] Invoking LLM (Turn {_turnsCount})...");
 
+            // Keep the history inside the class operating point. Agent traffic records under
+            // the "custom" class, so its budget is measurement-driven like everything else.
+            var op = SynapseTierController.GetOperatingPoint("custom");
+            int estimate = SynapseAgentHistory.CompactToBudget(_messages, op.MaxPromptTokens, _logCallback);
+            SynapseLogger.Message(
+                $"[Agent] Turn {_turnsCount}: prompt ~{estimate} tokens (cap {op.MaxPromptTokens}, governed by {op.GovernedBy}).",
+                "performance");
+
             var request = new LlmTextRequest
             {
                 Messages = _messages,
