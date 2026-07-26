@@ -123,6 +123,7 @@ namespace RimSynapse
             sb.AppendLine("  ]");
             sb.AppendLine("}");
             sb.AppendLine();
+            sb.AppendLine(SynapseScriptRunner.DescribeStepSchema());
             sb.AppendLine("IMPORTANT: If you have finished all actions or if there is nothing left to do, output a friendly natural language summary of your actions without any JSON block.");
             sb.AppendLine();
             sb.Append(BuildToolSection(_command));
@@ -130,10 +131,84 @@ namespace RimSynapse
             string systemPrompt = sb.ToString();
 
             _messages.Add(ChatMessage.System(systemPrompt));
-            _messages.Add(ChatMessage.User($"User Instruction: {_command}"));
+
+            // Turns are the latency: on slow hardware each plan-observe cycle is a full
+            // LLM round trip, so inlining the obviously-relevant read-only results lets
+            // simple requests finish in one turn instead of two.
+            string preSeed = BuildPreSeedSection(_command, out _);
+            string userContent = $"User Instruction: {_command}";
+            if (!string.IsNullOrEmpty(preSeed))
+            {
+                userContent += "\n\n" + preSeed;
+            }
+            _messages.Add(ChatMessage.User(userContent));
 
             var options = new ChatOptions { priority = 10, requestName = "API Command Resolver" };
             RunAgentLoop(options);
+        }
+
+        /// <summary>
+        /// Relevance a match must clear before it is pre-executed: keyword-grade (12)
+        /// and above. Description-level matches never justify speculative execution.
+        /// </summary>
+        public const double PreSeedScoreThreshold = 12.0;
+
+        /// <summary>
+        /// Run the obviously-relevant read-only tools before the first LLM call and
+        /// inline their results, labelled as pre-fetched.
+        ///
+        /// Safety: the mutating manifest is not yet a complete audit of every tool, so
+        /// the primary filter is a conservative name-prefix allowlist (get_/search_/list_);
+        /// the isMutating flag and executing with allowMutating: false are defence in
+        /// depth. A vague command that clears no threshold pre-seeds nothing — guessing
+        /// wrong spends budget and misleads the model, which is worse than a second turn.
+        /// The amount scales with the capability tier.
+        /// </summary>
+        public static string BuildPreSeedSection(string command, out List<string> preSeeded)
+        {
+            preSeeded = new List<string>();
+
+            var tier = SynapseTierController.Current;
+            int maxTools = tier == SynapseCapabilityTier.Rich ? 3
+                         : tier == SynapseCapabilityTier.Standard ? 2 : 1;
+            int excerptChars = tier == SynapseCapabilityTier.Rich ? 900
+                             : tier == SynapseCapabilityTier.Standard ? 600 : 300;
+
+            var sb = new System.Text.StringBuilder();
+            foreach (var match in SynapseToolIndex.Search(command, 10))
+            {
+                if (preSeeded.Count >= maxTools) break;
+                if (match.Score < PreSeedScoreThreshold) continue;
+
+                var tool = match.Tool;
+                if (tool.isMutating || tool.isDebugAction) continue;
+                if (!(tool.name.StartsWith("get_", StringComparison.Ordinal)
+                      || tool.name.StartsWith("search_", StringComparison.Ordinal)
+                      || tool.name.StartsWith("list_", StringComparison.Ordinal))) continue;
+
+                string result;
+                try
+                {
+                    result = SynapseToolRegistry.ExecuteTool(tool.name, "{}", allowMutating: false);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                // A failed speculation is not worth prompt space.
+                if (string.IsNullOrEmpty(result)
+                    || result.IndexOf("\"error\"", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+
+                sb.AppendLine($"### {tool.name}");
+                sb.AppendLine(SynapseResultStore.AbbreviateIfLarge(result, excerptChars));
+                preSeeded.Add(tool.name);
+                SynapseLogger.Message($"[Agent] Pre-seeded {tool.name} (score {match.Score:F0}, tier {tier}).", "performance");
+            }
+
+            if (preSeeded.Count == 0) return string.Empty;
+
+            return "Pre-fetched observations (read-only, gathered automatically before your first turn — verify with tools if critical):\n" + sb;
         }
 
         /// <summary>
