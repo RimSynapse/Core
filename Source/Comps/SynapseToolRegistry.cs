@@ -33,6 +33,12 @@ namespace RimSynapse
 
         public static void RegisterTool(string name, string description, object parametersSchema, Func<string, string> handler, bool isDebug = false, List<string> keywords = null)
         {
+            RegisterToolCore(name, description, parametersSchema, handler, isDebug, keywords);
+            SynapseToolIndex.Invalidate();
+        }
+
+        private static void RegisterToolCore(string name, string description, object parametersSchema, Func<string, string> handler, bool isDebug, List<string> keywords)
+        {
             EnsureInitialized();
             _tools[name] = new GameTool
             {

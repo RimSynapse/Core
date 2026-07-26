@@ -100,108 +100,61 @@ namespace RimSynapse
             sb.AppendLine();
             sb.AppendLine("IMPORTANT: If you have finished all actions or if there is nothing left to do, output a friendly natural language summary of your actions without any JSON block.");
             sb.AppendLine();
+            sb.Append(BuildToolSection(_command));
+
+            string systemPrompt = sb.ToString();
+
+            _messages.Add(ChatMessage.System(systemPrompt));
+            _messages.Add(ChatMessage.User($"User Instruction: {_command}"));
+
+            var options = new ChatOptions { priority = 10, requestName = "API Command Resolver" };
+            RunAgentLoop(options);
+        }
+
+        /// <summary>
+        /// The bounded tool section of the system prompt: a fixed core set plus the
+        /// index's best matches for the command — never the whole registry.
+        ///
+        /// The old selection fell back to describing every registered tool whenever fewer
+        /// than six non-core tools matched, so a vague command produced the *largest*
+        /// prompt. Now a vague command produces the smallest, and the model is told how to
+        /// search for anything not listed.
+        /// </summary>
+        public static string BuildToolSection(string command)
+        {
+            var sb = new System.Text.StringBuilder();
             sb.AppendLine("Available Tools (output them inside your JSON calls or steps):");
 
-            // Compile the list of tools to send using relevance-based RAG matching
-            var coreTools = new List<string> { 
-                "search_map_entities", 
-                "search_game_definitions", 
-                "possess_colonist", 
-                "damage_self_with_equipped", 
+            bool enableCheating = RimSynapseMod.Instance?.Settings?.enableCheatingActions ?? false;
+
+            var coreTools = new List<string> {
+                "search_map_entities",
+                "search_game_definitions",
+                "possess_colonist",
+                "damage_self_with_equipped",
                 "list_available_tools"
             };
+            if (enableCheating) coreTools.Add("modify_pawn_state");
 
-            bool enableCheating = RimSynapseMod.Instance?.Settings?.enableCheatingActions ?? false;
-            if (enableCheating)
-            {
-                coreTools.Add("modify_pawn_state");
-            }
-
-            var nonCoreScoredTools = new List<KeyValuePair<double, GameTool>>();
-
-            foreach (var tool in SynapseToolRegistry.AllTools)
-            {
-                if (tool.name == "execute_game_tool")
-                    continue;
-
-                // Hide debug/cheating tools if disabled
-                if (tool.isDebugAction && !enableCheating)
-                    continue;
-
-                if (coreTools.Contains(tool.name))
-                    continue;
-
-                // Build a quick string representation of parameters for RAG indexing
-                var paramsSb = new System.Text.StringBuilder();
-                try
-                {
-                    var parametersJObj = Newtonsoft.Json.Linq.JObject.FromObject(tool.parameters);
-                    if (parametersJObj != null && parametersJObj.TryGetValue("properties", out var propsToken) && propsToken is Newtonsoft.Json.Linq.JObject propsObj)
-                    {
-                        foreach (var prop in propsObj)
-                        {
-                            paramsSb.Append(" ").Append(prop.Key);
-                            if (prop.Value is Newtonsoft.Json.Linq.JObject pDetail && pDetail.TryGetValue("description", out var dToken))
-                            {
-                                paramsSb.Append(" ").Append(dToken.ToString());
-                            }
-                        }
-                    }
-                }
-                catch {}
-
-                double score = CalculateToolScore(_command, tool, paramsSb.ToString());
-                if (score > 0)
-                {
-                    nonCoreScoredTools.Add(new KeyValuePair<double, GameTool>(score, tool));
-                }
-            }
-
-            // Sort non-core tools descending by relevance score
-            nonCoreScoredTools.Sort((a, b) => b.Key.CompareTo(a.Key));
-
-            // Select only the tools to describe (6 Core + up to 6 top scoring Non-Core tools, or all non-core tools if matched count is 5 or less)
             var finalToolsList = new List<GameTool>();
-            
-            // Add core tools first
             foreach (var tool in SynapseToolRegistry.AllTools)
             {
-                if (coreTools.Contains(tool.name))
-                {
-                    // Double check debug action criteria
-                    if (tool.isDebugAction && !enableCheating)
-                        continue;
-
-                    finalToolsList.Add(tool);
-                }
+                if (!coreTools.Contains(tool.name)) continue;
+                if (tool.isDebugAction && !enableCheating) continue;
+                finalToolsList.Add(tool);
             }
 
-            // Append top non-core tools or fallback to all non-core tools
-            if (nonCoreScoredTools.Count <= 5)
+            int added = 0;
+            foreach (var match in SynapseToolIndex.Search(command, 12, includeDebug: enableCheating))
             {
-                foreach (var tool in SynapseToolRegistry.AllTools)
-                {
-                    if (tool.name != "execute_game_tool" && !coreTools.Contains(tool.name))
-                    {
-                        if (tool.isDebugAction && !enableCheating)
-                            continue;
-
-                        if (!finalToolsList.Contains(tool))
-                        {
-                            finalToolsList.Add(tool);
-                        }
-                    }
-                }
-            }
-            else
-            {
-                for (int i = 0; i < Math.Min(6, nonCoreScoredTools.Count); i++)
-                {
-                    finalToolsList.Add(nonCoreScoredTools[i].Value);
-                }
+                if (added >= 6) break;
+                var tool = match.Tool;
+                if (tool.name == "execute_game_tool" || coreTools.Contains(tool.name)) continue;
+                if (finalToolsList.Contains(tool)) continue;
+                finalToolsList.Add(tool);
+                added++;
             }
 
-            // Format the list for the system prompt
             foreach (var tool in finalToolsList)
             {
                 sb.AppendLine($"- **{tool.name}**: {tool.description}");
@@ -226,111 +179,13 @@ namespace RimSynapse
                 }
                 catch (Exception)
                 {
-                    // Fallback to name if serialization fails
+                    // Tool stays listed by name and description if its schema fails to serialise.
                 }
             }
 
-            string systemPrompt = sb.ToString();
-
-            _messages.Add(ChatMessage.System(systemPrompt));
-            _messages.Add(ChatMessage.User($"User Instruction: {_command}"));
-
-            var options = new ChatOptions { priority = 10, requestName = "API Command Resolver" };
-            RunAgentLoop(options);
-        }
-
-        private double CalculateToolScore(string command, GameTool tool, string paramsText)
-        {
-            double score = 0;
-            string cmdLower = command.ToLower();
-            string toolName = tool.name;
-            string nameLower = toolName.ToLower();
-            string descLower = tool.description.ToLower();
-            string paramsLower = paramsText.ToLower();
-
-            char[] splitChars = new char[] { ' ', ',', '.', '!', '?', ';', ':', '-', '_', '(', ')' };
-            string[] words = cmdLower.Split(splitChars, StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (var word in words)
-            {
-                if (word.Length <= 2 || word == "the" || word == "and" || word == "for" || word == "with" || word == "give" || word == "make" || word == "have")
-                    continue;
-
-                // Exact word match in tool name gets high priority
-                if (nameLower == word) score += 15.0;
-                else if (nameLower.Contains(word)) score += 5.0;
-
-                // Match in description
-                if (descLower.Contains(word)) score += 3.0;
-
-                // Match in parameter lists
-                if (paramsLower.Contains(word)) score += 2.0;
-            }
-
-            // Apply Dynamic Extensible Keywords Boost:
-            if (tool.keywords != null)
-            {
-                foreach (var kw in tool.keywords)
-                {
-                    if (cmdLower.Contains(kw.ToLower()))
-                    {
-                        score += 12.0;
-                    }
-                }
-            }
-
-            // Apply Semantic Association Boost Rules:
-            
-            // 1. Possessive / Pawn Pronouns -> Boost Pawn modification and possession tools
-            if (cmdLower.Contains("his") || cmdLower.Contains("her") || cmdLower.Contains("their") || 
-                cmdLower.Contains("him") || cmdLower.Contains("them") || cmdLower.Contains("she") || 
-                cmdLower.Contains("he") || cmdLower.Contains("self") || cmdLower.Contains("own") ||
-                cmdLower.Contains("pawn") || cmdLower.Contains("colonist") || cmdLower.Contains("animal"))
-            {
-                if (toolName == "modify_pawn_state" || toolName == "possess_colonist" || toolName == "damage_self_with_equipped")
-                    score += 10.0;
-            }
-
-            // 2. Action / Job Verbs -> Boost possession tools
-            if (cmdLower.Contains("equip") || cmdLower.Contains("prioritize") || cmdLower.Contains("walk") || 
-                cmdLower.Contains("go") || cmdLower.Contains("move") || cmdLower.Contains("build") || 
-                cmdLower.Contains("mine") || cmdLower.Contains("harvest") || cmdLower.Contains("clean") || 
-                cmdLower.Contains("haul") || cmdLower.Contains("repair") || cmdLower.Contains("work") || 
-                cmdLower.Contains("job") || cmdLower.Contains("construct"))
-            {
-                if (toolName == "possess_colonist")
-                    score += 10.0;
-            }
-
-            // 3. Combat / Harm words -> Boost combat self-harm and damage tools
-            if (cmdLower.Contains("kill") || cmdLower.Contains("damage") || cmdLower.Contains("hurt") || 
-                cmdLower.Contains("die") || cmdLower.Contains("suicide") || cmdLower.Contains("stab") || 
-                cmdLower.Contains("shoot") || cmdLower.Contains("fire") || cmdLower.Contains("attack") || 
-                cmdLower.Contains("wound") || cmdLower.Contains("bleed"))
-            {
-                if (toolName == "modify_pawn_state" || toolName == "damage_self_with_equipped")
-                    score += 12.0;
-            }
-
-            // 4. Incident / Threat words -> Boost incident and spawner tools
-            if (cmdLower.Contains("raid") || cmdLower.Contains("mechanoid") || cmdLower.Contains("threat") || 
-                cmdLower.Contains("infestation") || cmdLower.Contains("spawn") || cmdLower.Contains("incident") ||
-                cmdLower.Contains("event"))
-            {
-                if (toolName == "spawn_incident" || toolName == "trigger_raid" || toolName == "spawn_threat")
-                    score += 15.0;
-            }
-
-            // 5. Environment words -> Boost weather and time tools
-            if (cmdLower.Contains("weather") || cmdLower.Contains("time") || cmdLower.Contains("rain") || 
-                cmdLower.Contains("storm") || cmdLower.Contains("sun") || cmdLower.Contains("day") || 
-                cmdLower.Contains("night") || cmdLower.Contains("snow") || cmdLower.Contains("fog"))
-            {
-                if (toolName == "set_weather" || toolName == "set_time")
-                    score += 15.0;
-            }
-
-            return score;
+            sb.AppendLine();
+            sb.AppendLine("These are only the most relevant tools — more exist. Call list_available_tools with a 'query' to search the full directory, describe_tool with a 'name' for a tool's full schema, and execute_game_tool to run any tool by name.");
+            return sb.ToString();
         }
 
         public void RunAgentLoop(ChatOptions options)
