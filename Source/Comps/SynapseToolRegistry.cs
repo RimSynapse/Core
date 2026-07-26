@@ -63,6 +63,18 @@ namespace RimSynapse
             }
         }
 
+        /// <summary>
+        /// Whether a tool is registered. Callers that dispatch a caller-supplied name should
+        /// check this first: ExecuteTool answers an unknown name with an error payload rather
+        /// than throwing, which is easy to mistake for a tool's own output.
+        /// </summary>
+        public static bool IsToolRegistered(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            EnsureInitialized();
+            return _tools.ContainsKey(name);
+        }
+
         public static string ExecuteTool(string name, string argumentsJson)
         {
             EnsureInitialized();

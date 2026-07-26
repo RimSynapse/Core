@@ -32,6 +32,9 @@ namespace RimSynapse
             public int waitStartTick = 0;
             public Action<string> logCallback;
             public Action onFinished;
+
+            /// <summary>Results kept by a step's resultKey, surfaced in the completion log.</summary>
+            public readonly Dictionary<string, string> results = new Dictionary<string, string>();
         }
 
         private static readonly List<ActiveScript> _activeScripts = new List<ActiveScript>();
@@ -120,6 +123,87 @@ namespace RimSynapse
             }
         }
 
+        /// <summary>
+        /// Runs a step as a tool call.
+        ///
+        /// A step type is a tool name: anything not handled as an alias or as wait_until is
+        /// dispatched to <see cref="SynapseToolRegistry.ExecuteTool"/>. An explicit "call_tool"
+        /// step names the tool in its arguments instead, which is the only way to reach a tool
+        /// whose name collides with wait_until or one of the aliases rewritten above.
+        ///
+        /// The registry answers an unknown tool with an error payload rather than throwing, so
+        /// the name is checked first — otherwise a mistyped step logs that payload as ordinary
+        /// output and the script carries on as though it worked.
+        /// </summary>
+        private static void ExecuteToolStep(ActiveScript active, SynapseScriptStep step)
+        {
+            int stepNumber = active.currentStepIndex + 1;
+            var args = step.arguments ?? new Dictionary<string, object>();
+
+            string toolName = step.type;
+            string resultKey = null;
+
+            if (step.type.Equals("call_tool", StringComparison.OrdinalIgnoreCase))
+            {
+                toolName = args.TryGetValue("tool", out var t) ? t?.ToString() : null;
+                if (string.IsNullOrEmpty(toolName))
+                {
+                    active.logCallback?.Invoke($"[Error] Step {stepNumber}: call_tool needs a 'tool' argument naming the tool to run.");
+                    return;
+                }
+
+                // Nested arguments belong to the tool; anything else here is step metadata.
+                if (args.TryGetValue("arguments", out var inner) && inner != null)
+                {
+                    try { args = JsonConvert.DeserializeObject<Dictionary<string, object>>(JsonConvert.SerializeObject(inner)) ?? new Dictionary<string, object>(); }
+                    catch { args = new Dictionary<string, object>(); }
+                }
+                else
+                {
+                    args = new Dictionary<string, object>();
+                }
+            }
+
+            if (step.arguments != null && step.arguments.TryGetValue("resultKey", out var rk))
+            {
+                resultKey = rk?.ToString();
+                args.Remove("resultKey");
+            }
+
+            if (!SynapseToolRegistry.IsToolRegistered(toolName))
+            {
+                active.logCallback?.Invoke($"[Error] Step {stepNumber}: unknown tool '{toolName}'. Skipping.");
+                return;
+            }
+
+            active.logCallback?.Invoke($"[Script Runner] Executing step {stepNumber}: {toolName}");
+            try
+            {
+                string result = SynapseToolRegistry.ExecuteTool(toolName, JsonConvert.SerializeObject(args));
+
+                // Handlers report their own failures in the payload, so a returned error is not
+                // an ordinary result and should not read like one.
+                if (!string.IsNullOrEmpty(result) && result.IndexOf("\"error\"", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    active.logCallback?.Invoke($"[Error] Step {stepNumber} ({toolName}) reported: {result}");
+                }
+                else
+                {
+                    active.logCallback?.Invoke($"[Result] {result}");
+                }
+
+                if (!string.IsNullOrEmpty(resultKey))
+                {
+                    active.results[resultKey] = result;
+                    active.logCallback?.Invoke($"[Script Runner] Stored result as '{resultKey}'.");
+                }
+            }
+            catch (Exception ex)
+            {
+                active.logCallback?.Invoke($"[Error] Step {stepNumber} ({toolName}) threw: {ex.Message}");
+            }
+        }
+
         private static void ExecuteNextStep(ActiveScript active)
         {
             while (active.currentStepIndex < active.script.steps.Count && !active.isWaiting)
@@ -177,23 +261,24 @@ namespace RimSynapse
                 }
                 else
                 {
-                    active.logCallback?.Invoke($"[Script Runner] Executing step {active.currentStepIndex + 1}: {step.type}");
-                    try
-                    {
-                        string argsJson = JsonConvert.SerializeObject(step.arguments);
-                        string result = SynapseToolRegistry.ExecuteTool(step.type, argsJson);
-                        active.logCallback?.Invoke($"[Result] {result}");
-                    }
-                    catch (Exception ex)
-                    {
-                        active.logCallback?.Invoke($"[Error] Execution failed: {ex.Message}");
-                    }
+                    ExecuteToolStep(active, step);
                     active.currentStepIndex++;
                 }
             }
 
             if (active.currentStepIndex >= active.script.steps.Count)
             {
+                // Emit stored results before the finish line. SynapseActionExecutor hands the
+                // whole log back to the agent, so anything a step kept has to appear here to be
+                // visible on the next turn.
+                if (active.results.Count > 0)
+                {
+                    foreach (var kv in active.results)
+                    {
+                        active.logCallback?.Invoke($"[Script Runner] {kv.Key} = {kv.Value}");
+                    }
+                }
+
                 active.logCallback?.Invoke($"[Script Runner] Script '{active.script.scriptName}' finished.");
                 _toRemove.Add(active);
                 try
