@@ -166,10 +166,32 @@ namespace RimSynapse
         public bool qmShowProvider = true;
         public bool qmShowModel = true;
 
+        // --- Capability tier and cost governance ---
+
+        /// <summary>Tier selection: 0 = Auto (measured), 1 = Minimal, 2 = Standard, 3 = Rich.</summary>
+        public int agentTierMode = 0;
+
+        /// <summary>
+        /// EXPERIMENTAL: treat metered (cloud) backends as unmetered — scale context up
+        /// within the latency headroom and bypass the token caps. Can increase API spend.
+        /// </summary>
+        public bool ignoreTokenCosts = false;
+
+        /// <summary>Max prompt tokens per request on a metered backend.</summary>
+        public int tokenCapPerRequest = 4000;
+
+        /// <summary>Max total tokens per (real) day on a metered backend. Not persisted across restarts.</summary>
+        public int tokenCapPerDay = 200000;
+
         public override void ExposeData()
         {
             base.ExposeData();
             Scribe_Values.Look(ref apiProvider, "apiProvider", ApiProvider.Local_LMStudio);
+
+            Scribe_Values.Look(ref agentTierMode, "agentTierMode", 0);
+            Scribe_Values.Look(ref ignoreTokenCosts, "ignoreTokenCosts", false);
+            Scribe_Values.Look(ref tokenCapPerRequest, "tokenCapPerRequest", 4000);
+            Scribe_Values.Look(ref tokenCapPerDay, "tokenCapPerDay", 200000);
             
             Scribe_Values.Look(ref lmStudioUrl, "lmStudioUrl", "http://127.0.0.1:1234");
             Scribe_Values.Look(ref lmStudioApiKey, "lmStudioApiKey", "");

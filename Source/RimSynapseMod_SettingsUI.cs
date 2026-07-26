@@ -68,6 +68,44 @@ namespace RimSynapse
                     tooltip: "Manually specify your local LLM's context length (e.g. 32768, 16384, or 8192) if it cannot be dynamically detected from the provider API. Controls prompt size limits and paginators.");
             }
             
+            listing.Gap(4f);
+            string tierModeLabel;
+            switch (Settings.agentTierMode)
+            {
+                case 1: tierModeLabel = "Minimal"; break;
+                case 2: tierModeLabel = "Standard"; break;
+                case 3: tierModeLabel = "Rich"; break;
+                default: tierModeLabel = "Auto"; break;
+            }
+            if (listing.ButtonTextLabeled(
+                $"Capability tier (effective: {SynapseTierController.Current})",
+                tierModeLabel))
+            {
+                Settings.agentTierMode = (Settings.agentTierMode + 1) % 4;
+            }
+            listing.Label("  Auto starts at Minimal and promotes from measured response latency. " +
+                "Minimal fits ~2K context models; Rich spends more context on strong hardware.");
+
+            listing.Gap(4f);
+            listing.CheckboxLabeled("Ignore token costs (EXPERIMENTAL)",
+                ref Settings.ignoreTokenCosts,
+                "Treats metered cloud backends (OpenAI, Anthropic, Gemini, Pollinations) as unmetered: " +
+                "context scales up within the latency headroom and the token caps below are bypassed. " +
+                "This can significantly increase API spend. Logged when active.");
+
+            if (SynapseTierController.IsBackendMetered() && !Settings.ignoreTokenCosts)
+            {
+                listing.Gap(2f);
+                Settings.tokenCapPerRequest = (int)listing.SliderLabeled(
+                    $"  Token cap per request: {Settings.tokenCapPerRequest}",
+                    Settings.tokenCapPerRequest, 512f, 32768f,
+                    tooltip: "Maximum prompt tokens a single request may spend on this metered backend.");
+                Settings.tokenCapPerDay = (int)listing.SliderLabeled(
+                    $"  Token cap per day: {Settings.tokenCapPerDay} (spent today: {SynapsePerformanceModel.TokensSpentToday})",
+                    Settings.tokenCapPerDay, 10000f, 2000000f,
+                    tooltip: "Total tokens per real day on this metered backend. Resets at UTC midnight; not persisted across restarts.");
+            }
+
             listing.CheckboxLabeled("Enable storyteller tool usage",
                 ref Settings.enableStorytellerTools,
                 "When enabled, allows the AI storyteller to invoke tools to query precise game data. " +
