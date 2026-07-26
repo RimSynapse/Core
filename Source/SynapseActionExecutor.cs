@@ -77,6 +77,7 @@ namespace RimSynapse
 
                 if (script != null && !string.IsNullOrEmpty(script.scriptName) && script.steps != null && script.steps.Count > 0)
                 {
+                    bool allowMutating = AllowMutating(planner);
                     SynapseGameComponent.Enqueue(() =>
                     {
                         var scriptLog = new List<string>();
@@ -91,7 +92,7 @@ namespace RimSynapse
                             string scriptOutcome = SynapseResultStore.AbbreviateIfLarge(string.Join("\n", scriptLog), 1200);
                             messages.Add(ChatMessage.User($"Script execution finished. Logs:\n{scriptOutcome}\n\nPlease review and either generate next tool calls/script, or respond with a final summary if done."));
                             planner.RunAgentLoop(options);
-                        });
+                        }, allowMutatingTools: allowMutating);
                     });
                     return true;
                 }
@@ -109,6 +110,16 @@ namespace RimSynapse
                 }
             }
             return false;
+        }
+
+        /// <summary>
+        /// Player-initiated runs may always mutate; autonomous runs only when the player
+        /// has enabled it in settings.
+        /// </summary>
+        private static bool AllowMutating(SynapseLlmPlanner planner)
+        {
+            if (planner == null || !planner.IsAutonomous) return true;
+            return RimSynapseMod.Instance?.Settings?.allowAutonomousMutations ?? false;
         }
 
         /// <summary>Short, single-line excerpt of a payload for diagnostics.</summary>
@@ -157,7 +168,7 @@ namespace RimSynapse
                     try
                     {
                         string argsJson = JsonConvert.SerializeObject(call.arguments);
-                        outcome = SynapseToolRegistry.ExecuteTool(call.tool, argsJson);
+                        outcome = SynapseToolRegistry.ExecuteTool(call.tool, argsJson, AllowMutating(planner));
                         logCallback?.Invoke($"[Result] {outcome}");
 
                         // Oversized results travel back to the model as excerpt + handle.

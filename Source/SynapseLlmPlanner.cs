@@ -9,19 +9,44 @@ namespace RimSynapse
     /// </summary>
     public class SynapseLlmPlanner
     {
-        private const int MaxTurns = 5;
         private readonly string _command;
         private readonly Action<string> _logCallback;
         private readonly Action<bool, string> _onComplete;
         private readonly List<ChatMessage> _messages;
         private int _turnsCount = 0;
+        private int _requestsIssued = 0;
+        private volatile bool _cancelled;
 
-        public SynapseLlmPlanner(string command, Action<string> logCallback, Action<bool, string> onComplete)
+        /// <summary>
+        /// True for runs the player did not directly initiate (escalations, pre-seeded
+        /// evaluations). Autonomous runs may be barred from mutating tools via settings.
+        /// </summary>
+        public bool IsAutonomous { get; }
+
+        /// <summary>Turn ceiling, from settings. The old hardcoded limit was 5.</summary>
+        private static int MaxTurns => Math.Max(1, RimSynapseMod.Instance?.Settings?.agentMaxTurns ?? 8);
+
+        /// <summary>LLM-request ceiling per run. Turns and requests are currently 1:1, but
+        /// the budget is tracked separately so multi-request turns stay bounded too.</summary>
+        private static int MaxRequests => Math.Max(1, RimSynapseMod.Instance?.Settings?.agentMaxRequestsPerRun ?? 12);
+
+        public SynapseLlmPlanner(string command, Action<string> logCallback, Action<bool, string> onComplete, bool isAutonomous = false)
         {
             _command = command;
             _logCallback = logCallback;
             _onComplete = onComplete;
             _messages = new List<ChatMessage>();
+            IsAutonomous = isAutonomous;
+        }
+
+        /// <summary>
+        /// Stop the run: the next loop entry reports cancellation instead of calling the
+        /// LLM. A script in flight finishes its current step; aborting it via
+        /// SynapseScriptRunner.AbortScript routes back here through onFinished.
+        /// </summary>
+        public void Cancel()
+        {
+            _cancelled = true;
         }
 
         public void Start()
@@ -190,13 +215,31 @@ namespace RimSynapse
 
         public void RunAgentLoop(ChatOptions options)
         {
+            if (_cancelled)
+            {
+                _logCallback?.Invoke($"[Agent] Run cancelled after {_turnsCount} turn(s).");
+                SynapseLogger.Message($"[Agent] Run cancelled after {_turnsCount} turn(s).", "performance");
+                _onComplete?.Invoke(false, "Run cancelled.");
+                return;
+            }
+
             _turnsCount++;
             if (_turnsCount > MaxTurns)
             {
-                _logCallback?.Invoke("[Warning] Maximum execution turns reached. Terminating loop.");
-                _onComplete?.Invoke(false, "Max turns reached without final summary.");
+                _logCallback?.Invoke($"[Agent] Stopped: turn limit reached ({_turnsCount - 1}/{MaxTurns}).");
+                SynapseLogger.Message($"[Agent] Stopped: turn limit reached ({_turnsCount - 1}/{MaxTurns}).", "performance");
+                _onComplete?.Invoke(false, $"Turn limit reached ({MaxTurns}) without a final summary.");
                 return;
             }
+
+            if (_requestsIssued >= MaxRequests)
+            {
+                _logCallback?.Invoke($"[Agent] Stopped: request budget exhausted ({_requestsIssued}/{MaxRequests}).");
+                SynapseLogger.Message($"[Agent] Stopped: request budget exhausted ({_requestsIssued}/{MaxRequests}).", "performance");
+                _onComplete?.Invoke(false, $"Request budget exhausted ({MaxRequests}).");
+                return;
+            }
+            _requestsIssued++;
 
             _logCallback?.Invoke($"[API Agent] Invoking LLM (Turn {_turnsCount})...");
 
