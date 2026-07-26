@@ -2,9 +2,25 @@
 [b]Version:[/b] v0.5.2 (Target: RimWorld 1.6)
 
 [h1]RimSynapse - Core[/h1]
+[b][url=https://github.com/RimSynapse/Core/wiki]Official Wiki and Documentation[/url][/b]
 [b]The foundational Large Language Model (LLM) connector and narrative intelligence engine for RimWorld.[/b]
 
 RimSynapse Core is a powerful, asynchronous background engine that natively connects RimWorld to local Large Language Models (LLMs). It acts as the central brain of the RimSynapse ecosystem, automatically intercepting vanilla game events and orchestrating them into rich, cohesive story arcs.
+
+[h1]🔥 New Feature: LLM Direct Action Console[/h1]
+[b]Tired of memorizing complex dev console codes? Just say what you want in plain English![/b]
+
+The LLM Direct Action Console acts as an AI-powered command center. You simply open the console, type what you want in plain English, and the Storyteller LLM acts as an active agent to compile, translate, and execute native in-game tool calls automatically in real-time.
+
+[b]Example Command Input:[/b] [i]"Make Fred have 20 Shooting, remove the Bipolar trait from Sarah, and start a fire on the solar generator."[/i]
+
+[b]How it works:[/b]
+
+[b]Type in plain English:[/b] State your desires, scripts, or debug requests naturally.
+[b]AI Translation:[/b] The storyteller parses your input, mapping it to real C# game methods (modifying pawn skills, altering traits, spawning disasters, adjusting weather, etc.).
+[b]Instant Execution:[/b] The commands run natively on the active tick without breaking immersion.
+
+---
 
 [h2]Key Features[/h2]
 [list]
@@ -50,6 +66,14 @@ These ship when they are ready - no dates.
 [*] [b]NEW: Resident Life Support:[/b] Resident pawns will cook simple meals in their inventories near heat sources if low on food.
 [*] [b]Pawn-level Job Tracking:[/b] Relocated job and location tracking to per-pawn `SynapseCorePawnComp` (`CompTickRare`) to optimize CPU usage.
 [*] [b]Idle Backstory memory queueing:[/b] Resident pawns are flagged as high-priority, queueing backstory generation in background cycles.
+[/list]
+
+---
+
+[h2]Changelog (v0.5.0)[/h2]
+[list]
+[*] [b]Multi-Provider LLM Balancing:[/b] Enhanced multi-provider load balancing and capabilities filtering.
+[*] [b]Full RimWorld 1.6 & DLC Compatibility:[/b] Deep optimizations to support active storytellers across all official expansions.
 [/list]
 
 ---
