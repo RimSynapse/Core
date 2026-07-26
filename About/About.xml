@@ -30,7 +30,7 @@
     </incompatibleWith>
     <description>
 Discord Community: https://discord.gg/eVBebZ2N9s
-Version: v0.5.1 (Target: RimWorld 1.6)
+Version: v0.5.2 (Target: RimWorld 1.6)
 
 RimSynapse - Core
 Official Wiki and Documentation: https://github.com/RimSynapse/Core/wiki
@@ -57,6 +57,15 @@ RimSynapse Core is a powerful, asynchronous background engine that natively brin
 AI is incredibly cool, and having a framework to utilize powerful, no-cost local models really appealed to me. RimWorld is relatively light on GPU overhead, making it the absolute perfect candidate to max out those graphics cards by running a local LLM in the background. My goal with RimSynapse is to push the boundaries of emergent storytelling using the hardware you already own.
 
 --- Changelog ---
+v0.5.2
+- Fixed: Core failed to load entirely when a Harmony patch bound the wrong parameter name
+- Fixed: wiki guides in the Learning Helper threw an exception every frame
+- Fixed: developer scripting paths were hardcoded to one machine and now follow your install
+- Licence changed to PolyForm Noncommercial 1.0.0
+v0.5.1
+- API-level thinking controls, historical records and letter archival, resident life support
+v0.5.0
+- Regions and Territories module, expanded faction and world systems
 v0.4.0
 - New Features! (Multi-provider LLM balancing, Image Generation Framework, and LLM Capabilities filtering)
 v0.3.0
@@ -70,10 +79,14 @@ v0.1.0
 - Initial Release (Core framework, NVIDIA Tool, and Psychology module)
 
 --- Roadmap and Future Goals ---
-The initial roadmap for RimSynapse is now complete! Future updates will focus on maintaining the core framework and expanding functionality to allow other modders to build on top of it.
+0.6 - Agent and Tool Foundation: an in-game agent that plans and carries out multi-step actions on its own, backed by a growing library of tools it can query for colony, faction and world state.
+0.7 - Logic Externalization: retiring hardcoded thresholds so the storyteller reasons about your colony situation instead of following fixed rules.
+0.8 - Emergent Systems and Content: faction archetypes for each DLC, caravans that travel the world map, settlement crises, faction capitals and travelling leaders, and richer colonist social dynamics.
 
---- For Developers and Open Source ---
-RimSynapse is an open-source framework designed to be easily hooked into by other modders. I highly encourage you to read the framework documentation and build your own LLM-driven mods!
+These ship when they are ready - no dates.
+
+--- For Developers ---
+RimSynapse is a source-available framework designed to be easily hooked into by other modders. It is licensed under PolyForm Noncommercial 1.0.0: free to use, modify and share for any noncommercial purpose. I highly encourage you to read the framework documentation and build your own LLM-driven mods!
 - RimSynapse - Core Source and Docs: https://github.com/RimSynapse/Core
 - RimSynapse - Psychology Source: https://github.com/RimSynapse/Psychology
 - RimSynapse - Conversations Source: https://github.com/RimSynapse/Conversations
