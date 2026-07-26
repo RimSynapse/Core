@@ -86,7 +86,9 @@ namespace RimSynapse
                             scriptLog.Add(msg);
                         }, () =>
                         {
-                            string scriptOutcome = string.Join("\n", scriptLog);
+                            // Long script logs become excerpt + handle: the model rarely needs
+                            // every line, and on a small window it cannot afford them.
+                            string scriptOutcome = SynapseResultStore.AbbreviateIfLarge(string.Join("\n", scriptLog), 1200);
                             messages.Add(ChatMessage.User($"Script execution finished. Logs:\n{scriptOutcome}\n\nPlease review and either generate next tool calls/script, or respond with a final summary if done."));
                             planner.RunAgentLoop(options);
                         });
@@ -157,6 +159,9 @@ namespace RimSynapse
                         string argsJson = JsonConvert.SerializeObject(call.arguments);
                         outcome = SynapseToolRegistry.ExecuteTool(call.tool, argsJson);
                         logCallback?.Invoke($"[Result] {outcome}");
+
+                        // Oversized results travel back to the model as excerpt + handle.
+                        outcome = SynapseResultStore.AbbreviateIfLarge(outcome);
                     }
                     catch (Exception ex)
                     {

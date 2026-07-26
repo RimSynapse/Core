@@ -99,6 +99,7 @@ namespace RimSynapse
 
             // Register Built-in Tools
             RegisterMetaTools();
+            RegisterResultTools();
             RegisterColonistTools();
             RegisterStockpileTools();
             RegisterThreatTools();
