@@ -121,4 +121,5 @@ In-game: **Options → Mod Settings → RimSynapse Core**
 
 ## License
 
-MIT
+[PolyForm Noncommercial License 1.0.0](LICENSE) — free to use, modify, and
+redistribute for any noncommercial purpose. Commercial/paid use is not permitted.
