@@ -60,11 +60,15 @@ namespace RimSynapse.Core.Patches
     [HarmonyPatch(typeof(PlayerKnowledgeDatabase), nameof(PlayerKnowledgeDatabase.IsComplete))]
     public static class Patch_PlayerKnowledgeDatabase_IsComplete
     {
+        // The parameter must be named "conc": Harmony binds prefix arguments by name, and
+        // IsComplete's parameter is (ConceptDef conc) while GetKnowledge/SetKnowledge use
+        // (ConceptDef def). Naming it "def" here makes Harmony throw while patching, which
+        // propagates out of the Mod constructor and stops RimSynapse.Core loading at all.
         [HarmonyPrefix]
-        public static void Prefix(ConceptDef def)
+        public static void Prefix(ConceptDef conc)
         {
-            if (def == null || string.IsNullOrEmpty(def.defName)) return;
-            Patch_PlayerKnowledgeDatabase_GetKnowledge.EnsureKeyExists(def.defName);
+            if (conc == null || string.IsNullOrEmpty(conc.defName)) return;
+            Patch_PlayerKnowledgeDatabase_GetKnowledge.EnsureKeyExists(conc.defName);
         }
     }
 }
