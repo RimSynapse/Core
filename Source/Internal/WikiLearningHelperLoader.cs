@@ -66,8 +66,17 @@ namespace RimSynapse.Internal
 
                             // Construct a custom ConceptDef
                             ConceptDef concept = new ConceptDef();
-                            concept.defName = "RimSynapse_Wiki_" + mod.PackageIdPlayerFacing.Replace(".", "_") + "_" + fileName;
+                            concept.defName = SanitizeDefName(
+                                "RimSynapse_Wiki_" + mod.PackageIdPlayerFacing + "_" + fileName);
                             concept.label = title + " (" + mod.Name + ")";
+
+                            // Filenames can collide across mods once sanitized; a duplicate
+                            // defName would shadow the earlier entry in DefDatabase.
+                            if (DefDatabase<ConceptDef>.GetNamedSilentFail(concept.defName) != null)
+                            {
+                                SynapseLogger.Warning($"Skipping duplicate wiki concept '{concept.defName}' from '{file}'.");
+                                continue;
+                            }
                             
                             // Set fields dynamically via reflection
                             if (helpTextField != null)
@@ -98,8 +107,38 @@ namespace RimSynapse.Internal
 
             if (count > 0)
             {
+                // PlayerKnowledgeDatabase builds its ConceptDef -> knowledge lookup when it is
+                // first touched. Defs added afterwards are absent from that dictionary, and
+                // LessonAutoActivator calls IsComplete() on every ConceptDef each frame, so
+                // without this rebind the injected guides throw KeyNotFoundException in
+                // UIRootUpdate continuously.
+                try
+                {
+                    PlayerKnowledgeDatabase.ReloadAndRebind();
+                }
+                catch (Exception ex)
+                {
+                    SynapseLogger.Error("Failed to rebind PlayerKnowledgeDatabase after injecting wiki concepts: " + ex.Message);
+                }
+
                 SynapseLogger.Message($"[RimSynapse] Successfully injected {count} Wiki guides into the Learning Helper database.");
             }
+        }
+
+        /// <summary>
+        /// DefNames must be safe identifiers. Wiki filenames can contain hyphens, spaces and
+        /// dots (e.g. "cloud-llms"), which are not valid in a defName.
+        /// </summary>
+        private static string SanitizeDefName(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return "RimSynapse_Wiki_Unnamed";
+
+            var sb = new System.Text.StringBuilder(raw.Length);
+            foreach (char c in raw)
+            {
+                sb.Append(char.IsLetterOrDigit(c) ? c : '_');
+            }
+            return sb.ToString();
         }
 
         private static string ParseMarkdownToRichText(string markdown)
