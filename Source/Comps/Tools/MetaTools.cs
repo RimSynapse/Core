@@ -13,6 +13,24 @@ namespace RimSynapse
     /// </summary>
     public static partial class SynapseToolRegistry
     {
+        /// <summary>Parameter names only — the compact form for search listings.</summary>
+        private static List<string> ParamNames(GameTool tool)
+        {
+            var names = new List<string>();
+            try
+            {
+                var parametersJObj = Newtonsoft.Json.Linq.JObject.FromObject(tool.parameters);
+                if (parametersJObj != null
+                    && parametersJObj.TryGetValue("properties", out var propsToken)
+                    && propsToken is Newtonsoft.Json.Linq.JObject propsObj)
+                {
+                    foreach (var prop in propsObj) names.Add(prop.Key);
+                }
+            }
+            catch { }
+            return names;
+        }
+
         private static void RegisterMetaTools()
         {
             // Meta-Tool: list_available_tools
@@ -38,32 +56,85 @@ namespace RimSynapse
                     {
                         var parsedArgs = JsonConvert.DeserializeObject<Dictionary<string, object>>(args);
                         if (parsedArgs != null && parsedArgs.TryGetValue("query", out var qVal))
-                            filter = qVal?.ToString()?.ToLower();
+                            filter = qVal?.ToString();
                     }
                     catch {}
 
+                    // Compact on purpose: names, one-line descriptions and parameter names.
+                    // The old handler returned full schemas for the entire registry on an
+                    // unfiltered call, which no small context window can afford. Full
+                    // schemas come from describe_tool, one tool at a time.
                     var list = new List<object>();
-                    foreach (var tool in _tools.Values)
+
+                    if (!string.IsNullOrEmpty(filter))
                     {
-                        if (tool.isDebugAction || tool.name == "list_available_tools" || tool.name == "execute_game_tool")
-                            continue;
-
-                        if (!string.IsNullOrEmpty(filter))
+                        foreach (var match in SynapseToolIndex.Search(filter, 12))
                         {
-                            bool nameMatch = tool.name.ToLower().Contains(filter);
-                            bool descMatch = tool.description.ToLower().Contains(filter);
-                            if (!nameMatch && !descMatch)
+                            var tool = match.Tool;
+                            if (tool.name == "list_available_tools" || tool.name == "execute_game_tool")
                                 continue;
+                            list.Add(new
+                            {
+                                name = tool.name,
+                                description = tool.description,
+                                parameters = ParamNames(tool)
+                            });
                         }
-
-                        list.Add(new
-                        {
-                            name = tool.name,
-                            description = tool.description,
-                            parameterSchema = tool.parameters
-                        });
                     }
+                    else
+                    {
+                        foreach (var tool in _tools.Values.OrderBy(t => t.name))
+                        {
+                            if (tool.isDebugAction || tool.name == "list_available_tools" || tool.name == "execute_game_tool")
+                                continue;
+                            list.Add(new { name = tool.name, description = tool.description });
+                        }
+                    }
+
                     return JsonConvert.SerializeObject(list);
+                }
+            );
+
+            // Meta-Tool: describe_tool
+            RegisterTool(
+                "describe_tool",
+                "Get one tool's full description and parameter schema by exact name. Use after list_available_tools to inspect a tool before calling it.",
+                new Dictionary<string, object>
+                {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object>
+                    {
+                        ["name"] = new Dictionary<string, object>
+                        {
+                            ["type"] = "string",
+                            ["description"] = "The exact tool name, as returned by list_available_tools."
+                        }
+                    },
+                    ["required"] = new List<string> { "name" }
+                },
+                args =>
+                {
+                    string name = null;
+                    try
+                    {
+                        var parsedArgs = JsonConvert.DeserializeObject<Dictionary<string, object>>(args);
+                        if (parsedArgs != null && parsedArgs.TryGetValue("name", out var nVal))
+                            name = nVal?.ToString();
+                    }
+                    catch {}
+
+                    if (string.IsNullOrEmpty(name))
+                        return "{\"error\": \"Missing 'name' argument.\"}";
+
+                    if (!_tools.TryGetValue(name, out var tool))
+                        return $"{{\"error\": \"Tool '{name}' not found. Search with list_available_tools first.\"}}";
+
+                    return JsonConvert.SerializeObject(new
+                    {
+                        name = tool.name,
+                        description = tool.description,
+                        parameterSchema = tool.parameters
+                    });
                 }
             );
 
