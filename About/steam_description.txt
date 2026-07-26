@@ -1,5 +1,5 @@
 [b]Discord Community:[/b] [url=https://discord.gg/eVBebZ2N9s]https://discord.gg/eVBebZ2N9s[/url]
-[b]Version:[/b] v0.5.1 (Target: RimWorld 1.6)
+[b]Version:[/b] v0.5.2 (Target: RimWorld 1.6)
 
 [h1]RimSynapse - Core[/h1]
 [b]The foundational Large Language Model (LLM) connector and narrative intelligence engine for RimWorld.[/b]
@@ -18,6 +18,26 @@ RimSynapse Core is a powerful, asynchronous background engine that natively conn
 [*] [b]Colony Snapshots:[/b] Captures snapshots of the colony's mood, health, and stats when events occur to provide rich context.
 [*] [b]Memory Infrastructure:[/b] Provides the per-pawn memory bank, weighted tag system, and decay engine used by companion mods to give colonists persistent, evolving memories.
 [*] [b]Opportunistic Task Scheduling:[/b] A background task manager that feeds low-priority LLM requests (backstory generation, memory creation) into idle GPU cycles without impacting gameplay performance.
+[/list]
+
+---
+
+[h2]Roadmap[/h2]
+[list]
+[*] [b]0.6 - Agent and Tool Foundation:[/b] An in-game agent that plans and carries out multi-step actions on its own, backed by a growing library of tools it can query for colony, faction and world state.
+[*] [b]0.7 - Logic Externalization:[/b] Retiring hardcoded thresholds so the storyteller reasons about your colony's situation instead of following fixed rules.
+[*] [b]0.8 - Emergent Systems and Content:[/b] Faction archetypes for each DLC, caravans that travel the world map, settlement crises, faction capitals and travelling leaders, and richer colonist social dynamics.
+[/list]
+These ship when they are ready - no dates.
+
+---
+
+[h2]Changelog (v0.5.2)[/h2]
+[list]
+[*] [b]FIXED - Core failed to load:[/b] A Harmony patch bound the wrong parameter name on the game's knowledge database, which threw while patching and stopped RimSynapse Core initialising at all.
+[*] [b]FIXED - Learning Helper crash:[/b] Wiki guides added to RimWorld's Learning Helper threw an exception every frame. Guide names are now valid identifiers and duplicates are skipped.
+[*] [b]FIXED - Developer scripting paths:[/b] The developer file channel pointed at one machine's hard-coded drive, so it silently did nothing anywhere else. It now follows your install.
+[*] [b]Licence:[/b] Now PolyForm Noncommercial 1.0.0. Free to use, modify and share for any noncommercial purpose.
 [/list]
 
 ---
@@ -59,6 +79,7 @@ RimSynapse Core is a powerful, asynchronous background engine that natively conn
 
 ---
 
-[h2]Open Source and Support[/h2]
+[h2]Source Code and Support[/h2]
 GitHub: [url]https://github.com/RimSynapse/Core[/url]
+Licence: [url=https://polyformproject.org/licenses/noncommercial/1.0.0/]PolyForm Noncommercial License 1.0.0[/url] - free for any noncommercial use.
 Buy me a coffee: [url]https://buymeacoffee.com/archdukejim[/url]
