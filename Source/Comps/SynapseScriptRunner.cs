@@ -52,6 +52,32 @@ namespace RimSynapse
         }
 
         /// <summary>
+        /// Compact step reference for the system prompt. Owned here because the runner
+        /// defines step semantics; includes dynamically registered wait conditions so
+        /// companion-added conditions are discoverable without prompt edits.
+        /// </summary>
+        public static string DescribeStepSchema()
+        {
+            var conditions = new List<string>
+            {
+                "has_weapon", "has_ranged_weapon", "has_any_weapon", "reached_cell", "pawn_downed"
+            };
+            foreach (var name in _customConditions.Keys)
+            {
+                if (!conditions.Contains(name)) conditions.Add(name);
+            }
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("Script step reference:");
+            sb.AppendLine("- Any tool name can be a step \"type\"; its \"arguments\" follow that tool's schema (inspect with describe_tool). Unknown tool names are reported and skipped.");
+            sb.AppendLine("- \"call_tool\": run a tool named in arguments — { \"tool\": \"<name>\", \"arguments\": { ... } }. Use when a tool's name collides with a step keyword.");
+            sb.AppendLine($"- \"wait_until\": pause until a condition holds — {{ \"condition\": \"<name>\", \"pawnName\": \"<pawn>\", \"timeoutTicks\": 6000 }}. Conditions: {string.Join(", ", conditions)}. On timeout the script continues to the next step.");
+            sb.AppendLine("- Any tool step may include \"resultKey\": \"<label>\" to store its result; stored and oversized results are retrieved later with get_stored_result.");
+            sb.AppendLine("Use a script when actions are sequential, wait on game state, or span time. Use flat \"calls\" only for immediate same-tick actions.");
+            return sb.ToString();
+        }
+
+        /// <summary>
         /// Abort the first active script with the given name. onFinished still runs, so a
         /// cancelled agent chain resolves through its normal path (where the planner's
         /// cancel flag then reports the cancellation) instead of waiting forever.
