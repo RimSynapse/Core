@@ -183,6 +183,15 @@ namespace RimSynapse
         /// <summary>Max total tokens per (real) day on a metered backend. Not persisted across restarts.</summary>
         public int tokenCapPerDay = 200000;
 
+        /// <summary>Max plan-execute-observe turns per agent run. The old hardcoded limit was 5.</summary>
+        public int agentMaxTurns = 8;
+
+        /// <summary>Max LLM requests per agent run, independent of turns.</summary>
+        public int agentMaxRequestsPerRun = 12;
+
+        /// <summary>Whether autonomous agent runs (escalations, pre-seeding) may call state-mutating tools.</summary>
+        public bool allowAutonomousMutations = false;
+
         public override void ExposeData()
         {
             base.ExposeData();
@@ -192,6 +201,9 @@ namespace RimSynapse
             Scribe_Values.Look(ref ignoreTokenCosts, "ignoreTokenCosts", false);
             Scribe_Values.Look(ref tokenCapPerRequest, "tokenCapPerRequest", 4000);
             Scribe_Values.Look(ref tokenCapPerDay, "tokenCapPerDay", 200000);
+            Scribe_Values.Look(ref agentMaxTurns, "agentMaxTurns", 8);
+            Scribe_Values.Look(ref agentMaxRequestsPerRun, "agentMaxRequestsPerRun", 12);
+            Scribe_Values.Look(ref allowAutonomousMutations, "allowAutonomousMutations", false);
             
             Scribe_Values.Look(ref lmStudioUrl, "lmStudioUrl", "http://127.0.0.1:1234");
             Scribe_Values.Look(ref lmStudioApiKey, "lmStudioApiKey", "");

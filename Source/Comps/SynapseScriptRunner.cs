@@ -35,6 +35,9 @@ namespace RimSynapse
 
             /// <summary>Results kept by a step's resultKey, surfaced in the completion log.</summary>
             public readonly Dictionary<string, string> results = new Dictionary<string, string>();
+
+            /// <summary>Whether this script's tool steps may mutate game state.</summary>
+            public bool allowMutatingTools = true;
         }
 
         private static readonly List<ActiveScript> _activeScripts = new List<ActiveScript>();
@@ -46,6 +49,30 @@ namespace RimSynapse
         public static void RegisterWaitCondition(string conditionName, Func<Pawn, Dictionary<string, object>, bool> evaluator)
         {
             _customConditions[conditionName] = evaluator;
+        }
+
+        /// <summary>
+        /// Abort the first active script with the given name. onFinished still runs, so a
+        /// cancelled agent chain resolves through its normal path (where the planner's
+        /// cancel flag then reports the cancellation) instead of waiting forever.
+        /// </summary>
+        public static bool AbortScript(string scriptName)
+        {
+            var active = _activeScripts.FirstOrDefault(a =>
+                string.Equals(a.script?.scriptName, scriptName, StringComparison.OrdinalIgnoreCase));
+            if (active == null) return false;
+
+            _activeScripts.Remove(active);
+            active.logCallback?.Invoke($"[Script Runner] Script '{scriptName}' aborted at step {active.currentStepIndex + 1}.");
+            try
+            {
+                active.onFinished?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                active.logCallback?.Invoke($"[Error] onFinished after abort failed: {ex.Message}");
+            }
+            return true;
         }
 
         public static int ActiveScriptsCount => _activeScripts.Count;
@@ -60,16 +87,23 @@ namespace RimSynapse
             return list;
         }
 
+        // Binary-compatible original signature; the gating variant is a separate overload.
         public static void StartScript(SynapseScript script, Action<string> logCallback, Action onFinished = null)
         {
+            StartScript(script, logCallback, onFinished, allowMutatingTools: true);
+        }
+
+        public static void StartScript(SynapseScript script, Action<string> logCallback, Action onFinished, bool allowMutatingTools)
+        {
             if (script == null || script.steps == null || script.steps.Count == 0) return;
-            
+
             var active = new ActiveScript
             {
                 script = script,
                 currentStepIndex = 0,
                 logCallback = logCallback,
-                onFinished = onFinished
+                onFinished = onFinished,
+                allowMutatingTools = allowMutatingTools
             };
             
             _activeScripts.Add(active);
@@ -179,7 +213,7 @@ namespace RimSynapse
             active.logCallback?.Invoke($"[Script Runner] Executing step {stepNumber}: {toolName}");
             try
             {
-                string result = SynapseToolRegistry.ExecuteTool(toolName, JsonConvert.SerializeObject(args));
+                string result = SynapseToolRegistry.ExecuteTool(toolName, JsonConvert.SerializeObject(args), active.allowMutatingTools);
 
                 // Handlers report their own failures in the payload, so a returned error is not
                 // an ordinary result and should not read like one.

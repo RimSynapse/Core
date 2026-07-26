@@ -106,6 +106,19 @@ namespace RimSynapse
                     tooltip: "Total tokens per real day on this metered backend. Resets at UTC midnight; not persisted across restarts.");
             }
 
+            listing.Gap(4f);
+            Settings.agentMaxTurns = (int)listing.SliderLabeled(
+                $"Agent turn limit: {Settings.agentMaxTurns}",
+                Settings.agentMaxTurns, 1f, 20f,
+                tooltip: "Maximum plan-execute-observe turns per agent run. Each turn is a full LLM round trip.");
+            Settings.agentMaxRequestsPerRun = (int)listing.SliderLabeled(
+                $"Agent request budget per run: {Settings.agentMaxRequestsPerRun}",
+                Settings.agentMaxRequestsPerRun, 1f, 50f,
+                tooltip: "Maximum LLM requests one agent run may issue, independent of turns.");
+            listing.CheckboxLabeled("Allow autonomous runs to change game state",
+                ref Settings.allowAutonomousMutations,
+                "Autonomous agent runs (not started by you directly) are refused state-mutating tools unless this is on. Direct Action Console commands are always allowed.");
+
             listing.CheckboxLabeled("Enable storyteller tool usage",
                 ref Settings.enableStorytellerTools,
                 "When enabled, allows the AI storyteller to invoke tools to query precise game data. " +
