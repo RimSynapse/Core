@@ -192,6 +192,15 @@ namespace RimSynapse
         /// <summary>Whether autonomous agent runs (escalations, pre-seeding) may call state-mutating tools.</summary>
         public bool allowAutonomousMutations = false;
 
+        /// <summary>Whether programmed paths may escalate unexpected outcomes to the agent. Default off.</summary>
+        public bool enableEscalation = false;
+
+        /// <summary>Minimum seconds between escalated runs.</summary>
+        public int escalationCooldownSeconds = 120;
+
+        /// <summary>Maximum escalated runs per game session.</summary>
+        public int escalationSessionCap = 10;
+
         public override void ExposeData()
         {
             base.ExposeData();
@@ -204,6 +213,9 @@ namespace RimSynapse
             Scribe_Values.Look(ref agentMaxTurns, "agentMaxTurns", 8);
             Scribe_Values.Look(ref agentMaxRequestsPerRun, "agentMaxRequestsPerRun", 12);
             Scribe_Values.Look(ref allowAutonomousMutations, "allowAutonomousMutations", false);
+            Scribe_Values.Look(ref enableEscalation, "enableEscalation", false);
+            Scribe_Values.Look(ref escalationCooldownSeconds, "escalationCooldownSeconds", 120);
+            Scribe_Values.Look(ref escalationSessionCap, "escalationSessionCap", 10);
             
             Scribe_Values.Look(ref lmStudioUrl, "lmStudioUrl", "http://127.0.0.1:1234");
             Scribe_Values.Look(ref lmStudioApiKey, "lmStudioApiKey", "");
