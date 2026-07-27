@@ -89,7 +89,22 @@ Run these in order. Every step exists because skipping it has shipped a defect.
    `CHECKSUMS.sha256`.
 7. **Update the live Steam Workshop description for every mod** from
    `About/steam_description.txt`. The local file is only the source of truth — it changes
-   nothing on the Workshop until it is pasted into each item's page.
+   nothing on the Workshop until it is pasted into each item's page. Needs a
+   Steam-authenticated browser: the in-app browser is not signed in, so this requires the
+   Claude in Chrome extension to be connected (`list_connected_browsers` returning empty
+   means it is not). Edit URL is
+   `https://steamcommunity.com/sharedfiles/itemedittext/?id=<PublishedFileId>`:
+
+   | Mod | Workshop ID |
+   |---|---|
+   | Core | 3760829776 |
+   | Psychology | 3760830041 |
+   | Conversations | 3768363934 |
+   | Factions | 3767279097 |
+   | WorldNews | 3768365293 |
+   | Regions-and-Territories | 3768364266 |
+   | NVIDIA-Tool | 3760830285 |
+   | AuraAlgorithm | 3768364958 |
 8. **Tell the user to upload the new builds** through the in-game uploader (Core first —
    companions declare a dependency on it). This is the one step that cannot be automated:
    there is no reliable CLI path, so the release is not actually live until they do it.
