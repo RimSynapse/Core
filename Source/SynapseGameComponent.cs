@@ -33,6 +33,31 @@ namespace RimSynapse
         public SynapseGameComponent(Game game) { }
 
         /// <summary>
+        /// Scripts mid-run travel with the save as one JSON string (issue #20). Saves from
+        /// before this feature have no entry, so the string loads as null and restore is a
+        /// no-op; loading always discards whatever scripts the previous session left running
+        /// before restoring the save's own.
+        /// </summary>
+        public override void ExposeData()
+        {
+            base.ExposeData();
+
+            string persistedScripts = null;
+            if (Scribe.mode == LoadSaveMode.Saving)
+            {
+                persistedScripts = SynapseScriptRunner.SnapshotForSave();
+            }
+
+            Scribe_Values.Look(ref persistedScripts, "synapseActiveScripts");
+
+            if (Scribe.mode == LoadSaveMode.LoadingVars)
+            {
+                SynapseScriptRunner.ClearForLoad();
+                SynapseScriptRunner.RestoreFromSave(persistedScripts);
+            }
+        }
+
+        /// <summary>
         /// Enqueue an action to run on the main thread during the next frame.
         /// Thread-safe — can be called from any background thread.
         /// </summary>

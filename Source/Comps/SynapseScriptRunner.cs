@@ -38,6 +38,40 @@ namespace RimSynapse
 
             /// <summary>Whether this script's tool steps may mutate game state.</summary>
             public bool allowMutatingTools = true;
+
+            /// <summary>
+            /// Set on restore from a save. The next Tick re-anchors the wait timeout (or
+            /// continues execution) instead of comparing against a stale waitStartTick.
+            /// </summary>
+            public bool pendingResume = false;
+        }
+
+        /// <summary>
+        /// What was persisted for one active script. Scripts already travel as JSON (that is
+        /// the wire format the model emits), so persistence serialises this with Newtonsoft
+        /// into a single scribed string rather than scribing each field.
+        /// </summary>
+        private class PersistedScript
+        {
+            public SynapseScript script;
+            public int currentStepIndex;
+            public bool isWaiting;
+            public string waitCondition;
+            public string waitPawnName;
+            public int waitRemainingTicks;
+            public Dictionary<string, string> results;
+            public bool allowMutatingTools = true;
+        }
+
+        /// <summary>Read-only view of one active script, for persistence tests and the debugger.</summary>
+        public class SynapseScriptState
+        {
+            public string name;
+            public int currentStep;
+            public int totalSteps;
+            public bool isWaiting;
+            public string waitCondition;
+            public int remainingWaitTicks;
         }
 
         private static readonly List<ActiveScript> _activeScripts = new List<ActiveScript>();
@@ -102,6 +136,145 @@ namespace RimSynapse
         }
 
         public static int ActiveScriptsCount => _activeScripts.Count;
+
+        public static List<SynapseScriptState> GetActiveScriptStates()
+        {
+            int now = Find.TickManager?.TicksGame ?? 0;
+            var list = new List<SynapseScriptState>();
+            foreach (var a in _activeScripts)
+            {
+                list.Add(new SynapseScriptState
+                {
+                    name = a.script?.scriptName ?? "Unnamed",
+                    currentStep = a.currentStepIndex + 1,
+                    totalSteps = a.script?.steps?.Count ?? 0,
+                    isWaiting = a.isWaiting,
+                    waitCondition = a.waitCondition,
+                    remainingWaitTicks = !a.isWaiting ? 0
+                        : a.pendingResume ? a.waitTimeoutTicks
+                        : Math.Max(0, a.waitTimeoutTicks - (now - a.waitStartTick)),
+                });
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Serialise every active script for the save, or null when there are none (so
+        /// nothing is written and pre-feature saves stay shape-identical). Any script in
+        /// the list is normally mid-wait — StartScript runs synchronously until a wait or
+        /// completion — but currentStepIndex is persisted regardless.
+        /// </summary>
+        public static string SnapshotForSave()
+        {
+            if (_activeScripts.Count == 0) return null;
+
+            int now = Find.TickManager?.TicksGame ?? 0;
+            var persisted = new List<PersistedScript>();
+            foreach (var a in _activeScripts)
+            {
+                persisted.Add(new PersistedScript
+                {
+                    script = a.script,
+                    currentStepIndex = a.currentStepIndex,
+                    isWaiting = a.isWaiting,
+                    waitCondition = a.waitCondition,
+                    waitPawnName = a.waitPawnName,
+                    // Remaining, not absolute: TicksGame in the loaded game continues from
+                    // the save, but re-anchoring from remaining time is what keeps a restored
+                    // wait from expiring instantly if anything shifts the clock.
+                    waitRemainingTicks = a.isWaiting
+                        ? Math.Max(1, a.waitTimeoutTicks - (now - a.waitStartTick))
+                        : 0,
+                    results = a.results.Count > 0 ? new Dictionary<string, string>(a.results) : null,
+                    allowMutatingTools = a.allowMutatingTools,
+                });
+            }
+
+            try
+            {
+                return JsonConvert.SerializeObject(persisted);
+            }
+            catch (Exception ex)
+            {
+                SynapseLogger.Warning($"[Script Runner] Could not serialise {persisted.Count} active script(s) for the save: [{ex.GetType().Name}] {ex.Message}", "performance");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Restore scripts persisted by <see cref="SnapshotForSave"/>. Returns how many were
+        /// restored; null/empty/unreadable input is a no-op (a pre-feature save has no entry
+        /// at all and lands here as null).
+        ///
+        /// The continuation decision (issue #20): the script itself resumes, but the agent
+        /// chain does not. logCallback and onFinished are closures over the old process's
+        /// planner state and cannot be serialised, so a restored script logs through
+        /// SynapseLogger and finishes without a continuation — and says so, once, at restore.
+        /// Persisting the whole agent conversation was rejected: the game state the
+        /// conversation reasoned about is stale after a load, so a "resumed" agent would be
+        /// acting on a world that no longer matches its history.
+        /// </summary>
+        public static int RestoreFromSave(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return 0;
+
+            List<PersistedScript> persisted;
+            try
+            {
+                persisted = JsonConvert.DeserializeObject<List<PersistedScript>>(json);
+            }
+            catch (Exception ex)
+            {
+                SynapseLogger.Warning($"[Script Runner] Persisted scripts in the save could not be read: [{ex.GetType().Name}] {ex.Message}", "performance");
+                return 0;
+            }
+            if (persisted == null || persisted.Count == 0) return 0;
+
+            int restored = 0;
+            foreach (var p in persisted)
+            {
+                if (p?.script?.steps == null || p.script.steps.Count == 0) continue;
+
+                var active = new ActiveScript
+                {
+                    script = p.script,
+                    currentStepIndex = Math.Max(0, Math.Min(p.currentStepIndex, p.script.steps.Count - 1)),
+                    isWaiting = p.isWaiting,
+                    waitCondition = p.waitCondition,
+                    waitPawnName = p.waitPawnName,
+                    waitTimeoutTicks = Math.Max(1, p.waitRemainingTicks),
+                    waitStartTick = 0,
+                    allowMutatingTools = p.allowMutatingTools,
+                    pendingResume = true,
+                    logCallback = line => SynapseLogger.Message(line, "performance"),
+                    onFinished = null,
+                };
+                if (p.results != null)
+                {
+                    foreach (var kv in p.results) active.results[kv.Key] = kv.Value;
+                }
+
+                _activeScripts.Add(active);
+                restored++;
+                SynapseLogger.Message(
+                    $"[Script Runner] Restored script '{active.script.scriptName}' at step {active.currentStepIndex + 1}/{active.script.steps.Count} from save. Its agent chain was interrupted by the save and will not resume; further output goes to the log.",
+                    "performance");
+            }
+            return restored;
+        }
+
+        /// <summary>
+        /// Drop every active script before a game loads. The old game's scripts (and their
+        /// agent chains) belong to a world that is being replaced; onFinished is deliberately
+        /// NOT invoked — those closures reference state mid-teardown, and the planner's own
+        /// run limits bound any chain left dangling.
+        /// </summary>
+        public static void ClearForLoad()
+        {
+            if (_activeScripts.Count == 0) return;
+            SynapseLogger.Message($"[Script Runner] Discarding {_activeScripts.Count} active script(s) from the previous session.", "performance");
+            _activeScripts.Clear();
+        }
 
         public static List<string> GetActiveScriptNames()
         {
@@ -174,6 +347,25 @@ namespace RimSynapse
             var listCopy = _activeScripts.ToList();
             foreach (var active in listCopy)
             {
+                // First tick after a restore: re-anchor the wait against the loaded game's
+                // clock (waitTimeoutTicks already holds the remaining time), or pick the
+                // script back up if it was somehow persisted between steps.
+                if (active.pendingResume)
+                {
+                    active.pendingResume = false;
+                    if (active.isWaiting)
+                    {
+                        active.waitStartTick = currentTick;
+                        active.logCallback?.Invoke($"[Script Runner] Script '{active.script?.scriptName}' resumed: wait timeout re-anchored with {active.waitTimeoutTicks} ticks remaining.");
+                    }
+                    else
+                    {
+                        active.logCallback?.Invoke($"[Script Runner] Script '{active.script?.scriptName}' resumed at step {active.currentStepIndex + 1}.");
+                        ExecuteNextStep(active);
+                        continue;
+                    }
+                }
+
                 if (active.isWaiting)
                 {
                     bool conditionMet = false;
