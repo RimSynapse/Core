@@ -93,7 +93,21 @@ Run these in order. Every step exists because skipping it has shipped a defect.
    Steam-authenticated browser: the in-app browser is not signed in, so this requires the
    Claude in Chrome extension to be connected (`list_connected_browsers` returning empty
    means it is not). Edit URL is
-   `https://steamcommunity.com/sharedfiles/itemedittext/?id=<PublishedFileId>`:
+   `https://steamcommunity.com/sharedfiles/itemedittext/?id=<PublishedFileId>`.
+
+   Mechanics that cost an hour to work out the first time:
+   - **8000 characters, enforced silently.** Over the cap, Steam accepts the paste, Save
+     looks like it works, and the live page keeps the old text. `verify-metadata.ps1`
+     now fails on this, but check it before wondering why a save "did nothing".
+   - Set `textarea[name="description"].value`, fire an `input` event, then call
+     `ValidateForm()` — the Save control is `<a href="javascript:ValidateForm()">` and a
+     synthetic `.click()` on it does nothing. Wrap it in `setTimeout(...,50)` so the
+     navigation does not time out the CDP evaluate.
+   - Verify by SHA-256: hash the textarea value and the local file (both normalised to
+     `\n`, trailing whitespace stripped) and compare. Length alone is not proof.
+   - Fetching the file from raw.githubusercontent.com inside the page is blocked by
+     Steam's CSP, and the sandbox cannot reach the clipboard — the text has to be
+     inlined into the injected script.
 
    | Mod | Workshop ID |
    |---|---|
