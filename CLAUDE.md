@@ -65,6 +65,25 @@ The harness lives in the `Repo-MCP` repo (`harness/*.ps1`); the in-game suite is
   `execute_game_tool` must stay flagged — it can launder any mutation.
 - Never assume all registered tools fit in a prompt; the 2k-window floor governs.
 
+## Release gate
+
+Binaries have two sources of truth, and both have drifted before. Before tagging:
+
+```powershell
+.\harness\verify-binaries.ps1 -Build   # rebuild, then check every shipped DLL
+.\harness\release-manifest.ps1         # regenerate Core's Assemblies/CHECKSUMS.sha256
+```
+
+- Companion repos **track** their DLLs (a cloned companion repo is a playable mod). The
+  hazard is source landing without a rebuild — Psychology shipped a source-only escalation
+  feature this way. `verify-binaries.ps1 -Build` fails when a committed DLL differs from a
+  fresh build of its own source.
+- Core does **not** track its DLLs (they attach to Releases), so its record is
+  `Assemblies/CHECKSUMS.sha256` — version, commit, and SHA256 per file. Regenerate it in
+  the release commit, attach the same DLLs as Release assets, and re-run
+  `verify-binaries.ps1` immediately before a Workshop upload to confirm the files on disk
+  are byte-for-byte the released build.
+
 ## Branch discipline
 
 - Work lands on `development` via PRs; `main` only via release promotion PRs.
