@@ -1,0 +1,67 @@
+RimSynapse v0.6.0 — Agent and Tool Foundation
+=============================================
+
+Paste the block for each mod into Steam's "Change Notes" box when uploading that
+item's update. These are the short per-update notes; the full changelog lives in
+each mod's Workshop description (About/steam_description.txt).
+
+Upload Core first — the companions declare a dependency on it.
+
+
+────────────────────────────────────────────────────────────────────────
+CORE
+────────────────────────────────────────────────────────────────────────
+[h1]v0.6.0 - Agent and Tool Foundation[/h1]
+
+The storyteller can now plan and carry out multi-step work on its own, and it is
+built to stay fast on modest hardware.
+
+[b]The agent[/b]
+[list]
+[*] Multi-step plans that call game tools, wait on game conditions, see the result and continue - so an order like "fetch a weapon, then use it" actually works.
+[*] Plans survive saving and loading, resuming at the right step without instantly timing out.
+[*] Turn limits, a per-run request budget and a stop button.
+[*] Actions the agent takes on its own initiative cannot change your colony unless you enable "Allow autonomous mutations".
+[*] Scripted features can escalate to the agent when they hit something they were never taught to handle (off by default).
+[*] New Agent Runs inspector in the Script Debugger: what it decided, what it ran, what came back, what it cost - and cancel.
+[*] Fixed: mistyped tools used to look like successes and malformed plans were dropped silently. Both are reported now.
+[/list]
+
+[b]Speed and small hardware[/b]
+[list]
+[*] Core measures real response times and scales its ambition to your machine - starting conservative, stepping back down the moment things slow.
+[*] Designed down to a 2k context window: the agent is told about the few tools your request needs and searches for the rest on demand.
+[*] Useful lookups run before the first request, so simple requests often finish in one round trip instead of two.
+[*] Colonist conversations get priority and aim for under half a second; background work fits itself into the in-game night and yields to you.
+[*] Cloud APIs are budgeted by token cost by default, with an experimental toggle to ignore cost.
+[/list]
+
+[b]Compatibility[/b]
+[list]
+[*] v0.5.x saves load unchanged.
+[*] The other RimSynapse mods are unaffected - verified by running their published v0.5.2 builds against this release.
+[*] No published code interface was removed, so mods built against RimSynapse keep working.
+[/list]
+
+
+────────────────────────────────────────────────────────────────────────
+PSYCHOLOGY
+────────────────────────────────────────────────────────────────────────
+[h1]v0.6.0[/h1]
+[list]
+[*] NEW: When the language model returns a ceremony record the mod cannot read, the situation is handed to Core's agent to salvage rather than dropped with a warning. (Requires Core's escalation setting to be enabled.)
+[*] Requires RimSynapse Core v0.6.0. Saves and settings carry over unchanged.
+[*] In-game wiki guides updated; "MCP endpoints" renamed to game tools.
+[/list]
+
+
+────────────────────────────────────────────────────────────────────────
+CONVERSATIONS / FACTIONS / WORLDNEWS / REGIONS AND TERRITORIES /
+NVIDIA TOOL / AURA ALGORITHM
+────────────────────────────────────────────────────────────────────────
+[h1]v0.6.0[/h1]
+[list]
+[*] Moves in step with RimSynapse Core v0.6.0 (Agent and Tool Foundation). Your saves and settings carry over unchanged.
+[*] In-game wiki guides updated; "MCP" renamed to game tools throughout, matching Core's native tool-calling engine.
+[*] No gameplay changes in this mod itself - the new capability lives in Core.
+[/list]

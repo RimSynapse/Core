@@ -1,5 +1,5 @@
 [b]Discord Community:[/b] [url=https://discord.gg/eVBebZ2N9s]https://discord.gg/eVBebZ2N9s[/url]
-[b]Version:[/b] v0.5.2 (Target: RimWorld 1.6)
+[b]Version:[/b] v0.6.0 (Target: RimWorld 1.6)
 
 [h1]RimSynapse - Core[/h1]
 [b][url=https://github.com/RimSynapse/Core/wiki]Official Wiki and Documentation[/url][/b]
@@ -40,11 +40,43 @@ The LLM Direct Action Console acts as an AI-powered command center. You simply o
 
 [h2]Roadmap[/h2]
 [list]
-[*] [b]0.6 - Agent and Tool Foundation:[/b] An in-game agent that plans and carries out multi-step actions on its own, backed by a growing library of tools it can query for colony, faction and world state.
+[*] [b]0.6 - Agent and Tool Foundation:[/b] ✅ Delivered in v0.6.0 - see the changelog below.
 [*] [b]0.7 - Logic Externalization:[/b] Retiring hardcoded thresholds so the storyteller reasons about your colony's situation instead of following fixed rules.
 [*] [b]0.8 - Emergent Systems and Content:[/b] Faction archetypes for each DLC, caravans that travel the world map, settlement crises, faction capitals and travelling leaders, and richer colonist social dynamics.
 [/list]
 These ship when they are ready - no dates.
+
+---
+
+[h2]Changelog (v0.6.0) - Agent and Tool Foundation[/h2]
+[b]The storyteller can now plan and carry out multi-step work on its own - and it is built to stay fast on modest hardware.[/b]
+
+[b]The agent[/b]
+[list]
+[*] [b]NEW - Multi-step plans that wait on the game:[/b] The agent composes scripts that call game tools, pause until something is true (a pawn reaches a spot, picks up a weapon, goes down), see what happened, and keep going. No more one-shot commands that fail because the pawn had not arrived yet.
+[*] [b]NEW - Scripts survive saving and loading:[/b] A plan waiting on a game condition picks up where it left off after a reload, with its timeout re-anchored so it does not instantly give up.
+[*] [b]NEW - Run controls:[/b] Turn limits, a per-run request budget, and a stop button. Nothing can spiral.
+[*] [b]NEW - Autonomous actions are gated:[/b] Anything the agent does on its own initiative cannot change your colony unless you switch on "Allow autonomous mutations". Your own commands are unaffected.
+[*] [b]NEW - The storyteller escalates when reality surprises it:[/b] When a scripted feature hits something it was never taught to handle, it hands the situation to the agent instead of quietly giving up. Off by default, rate-limited when on.
+[*] [b]NEW - Agent Runs inspector:[/b] The Script Debugger now shows what the agent decided each turn, what it ran, what came back, what it cost, and lets you cancel a run.
+[*] [b]FIXED - Silent failures:[/b] A mistyped tool used to look like a success, and a malformed plan was dropped with nothing in the log. Both are now reported plainly.
+[/list]
+
+[b]Speed and small hardware[/b]
+[list]
+[*] [b]NEW - It measures your setup instead of guessing:[/b] Core times real end-to-end responses and picks a capability tier from the evidence - starting conservative, scaling up only when your machine proves it can, and stepping back down the moment responses slow.
+[*] [b]NEW - Designed down to a 2k context window:[/b] The agent is told about the handful of tools your request actually needs, and can search for the rest mid-conversation. A vague request now produces the smallest prompt instead of the largest.
+[*] [b]NEW - Faster answers:[/b] Obviously-useful lookups run before the first request and are included up front, so simple requests often finish in one round trip instead of two. Large results travel as a short excerpt the model can expand on demand.
+[*] [b]NEW - Conversations get priority:[/b] Colonist dialogue aims for under half a second. Background work (like nightly reviews) sizes itself to finish inside the in-game night, learns which hours are usually quiet, and always yields to whatever you are doing.
+[*] [b]NEW - Cloud API cost control:[/b] Cloud providers are treated as pay-per-token by default and budgeted accordingly, with an experimental toggle to ignore cost and simply go as rich as latency allows.
+[/list]
+
+[b]Compatibility[/b]
+[list]
+[*] [b]Your saves are fine.[/b] v0.5.x saves load unchanged.
+[*] [b]The other RimSynapse mods are fine.[/b] Verified by running the actual published v0.5.2 builds of every companion mod against this version - all loaded cleanly with the full test suite passing.
+[*] [b]Other mods built against RimSynapse are fine.[/b] No published code interface was removed, and an automated test now guards that.
+[/list]
 
 ---
 

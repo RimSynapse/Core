@@ -33,7 +33,15 @@ namespace RimSynapse
         /// <summary>Identifies this run in <see cref="SynapseAgentRunLog"/>, the inspector's backing model.</summary>
         public int RunId { get; }
 
-        public SynapseLlmPlanner(string command, Action<string> logCallback, Action<bool, string> onComplete, bool isAutonomous = false)
+        // Binary-compatible original signature. Kept as a distinct overload rather than an
+        // optional parameter: appending one would delete this signature from the assembly
+        // and break any mod compiled against an earlier Core.
+        public SynapseLlmPlanner(string command, Action<string> logCallback, Action<bool, string> onComplete)
+            : this(command, logCallback, onComplete, false)
+        {
+        }
+
+        public SynapseLlmPlanner(string command, Action<string> logCallback, Action<bool, string> onComplete, bool isAutonomous)
         {
             _command = command;
             _logCallback = logCallback;
