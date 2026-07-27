@@ -31,16 +31,53 @@ This is a **capture-first** discipline, not a bookkeeping step at the end:
    (`verify-binaries`, `verify-metadata`, `sync-wiki`) are themselves issues and PRs,
    not silent additions.
 
-Managing the board needs a scope the default token lacks:
+### Working with the board
+
+The board is **org-level**: `https://github.com/orgs/RimSynapse/projects/2`, one project
+named "RimSynapse" (node `PVT_kwDOEfI01s4Bdlhx`). It is not a per-repo project — when a
+picker offers two entries both called "RimSynapse", check `data-id`: they have been
+observed to be the *same* project rendered twice, not a repo/org pair.
+
+**Prefer the CLI.** It needs a scope the default token lacks:
 
 ```bash
 gh auth refresh -s read:project,project
 ```
 
-Without it `gh project` fails and — the trap — `gh issue view --json projectItems`
-returns an **empty list rather than an error**, which reads as "not on the board" for
-every issue. Do not conclude anything about board membership on a token that cannot
-see projects.
+This is **interactive** — it prints a one-time code and waits for a browser
+authorisation, so the maintainer must run it; it cannot be done from a tool call.
+Verify it actually landed with `gh api -i user` and read the `X-Oauth-Scopes` header,
+**not** `gh auth status` alone. Approving the app in GitHub settings does *not* update
+the stored token; only completing `gh auth refresh` does.
+
+The trap: without the scope, `gh project` errors *but*
+`gh issue view --json projectItems` returns an **empty list rather than an error** — so
+every issue reads as "not on the board". Never conclude anything about board membership
+from a token that cannot see projects.
+
+**Browser fallback** (works today, no scope needed — the maintainer's Chrome is signed
+in). Two routes, and the second is far faster:
+
+- *Per issue:* open the issue, click **Edit Projects** in the sidebar, click the
+  "RimSynapse" option, then press **Escape**. Do not dismiss with a synthetic
+  `document.body.click()` — that discards the selection. The sidebar text may not
+  refresh immediately; reload and look for `Projects | RimSynapse | Status | Backlog`.
+- *Bulk (preferred):* open the board, click **Add item** at the bottom of the Backlog
+  column once, then repeatedly `type` a full issue URL and press `Return`. The input
+  stays focused between adds, so ten issues are ten type/Enter pairs with no extra
+  clicks and no navigation.
+
+**Verifying the board is unreliable if done naively** — two independent reasons:
+
+1. The default view is **filtered** (`iteration:@current or status:Backlog`), so counts
+   are filtered counts, not board totals.
+2. Columns are **virtualised**: only the visible window of cards exists in the DOM, so a
+   card that is present will read as missing. Scroll the column and accumulate text
+   across scroll positions before concluding anything is absent — a scan without
+   scrolling reported 5 of 11 items missing that were all in fact there.
+
+Real mouse actions (`computer` clicks/keys) work on these React controls; synthetic
+`.click()` from injected JS frequently does not.
 
 ## Binary compatibility (the rule that broke three mods)
 
