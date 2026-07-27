@@ -45,6 +45,10 @@ namespace RimSynapse.Internal
         
         public static float HistoryRetentionSeconds = 5f;
 
+        /// <summary>When the last foreground (non-opportunistic) request arrived. The
+        /// opportunistic dispatcher stands down for a few seconds after this.</summary>
+        public static DateTime LastForegroundEnqueueUtc = DateTime.MinValue;
+
         private static readonly Thread _workerThread;
         private static readonly AutoResetEvent _signal = new AutoResetEvent(false);
         private static volatile bool _shutdown;
@@ -198,6 +202,25 @@ namespace RimSynapse.Internal
             if (mod != null)
             {
                 mod.QueuedCount++;
+            }
+
+            // Demand forecasting: foreground arrivals teach the scheduler which in-game
+            // hours are historically quiet. Requests fired by the opportunistic manager
+            // are excluded — they only run when the queue is already idle, so counting
+            // them would make quiet hours look busy and suppress the scheduling they
+            // exist to enable.
+            if (!OpportunisticTaskManager.IsFiringTask)
+            {
+                LastForegroundEnqueueUtc = DateTime.UtcNow;
+                try
+                {
+                    if (Verse.Current.ProgramState == Verse.ProgramState.Playing && Verse.Find.TickManager != null)
+                    {
+                        int abs = Verse.Find.TickManager.TicksAbs;
+                        SynapseDemandForecast.RecordForeground(abs / 60000, abs / 2500 % 24);
+                    }
+                }
+                catch { }
             }
 
             lock (_queueLock)
