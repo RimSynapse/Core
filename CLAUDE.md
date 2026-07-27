@@ -70,9 +70,18 @@ The harness lives in the `Repo-MCP` repo (`harness/*.ps1`); the in-game suite is
 Binaries have two sources of truth, and both have drifted before. Before tagging:
 
 ```powershell
+.\harness\verify-metadata.ps1          # version + changelog agree in all three places
 .\harness\verify-binaries.ps1 -Build   # rebuild, then check every shipped DLL
 .\harness\release-manifest.ps1         # regenerate Core's Assemblies/CHECKSUMS.sha256
 ```
+
+**Every mod states its version in three independent places** and they drift silently:
+`About.xml <modVersion>` (read by mod managers), `About.xml <description>` (the in-game
+mod list blurb), and `About/steam_description.txt` (the Workshop page). v0.6.0 shipped
+with the first bumped and the second still reading v0.5.2 with no 0.6.0 notes — the
+embedded description is easy to forget precisely because it duplicates the Workshop copy.
+`verify-metadata.ps1` fails when they disagree, when the description's changelog has no
+entry for the current version, or when About.xml stops being well-formed.
 
 - Companion repos **track** their DLLs (a cloned companion repo is a playable mod). The
   hazard is source landing without a rebuild — Psychology shipped a source-only escalation

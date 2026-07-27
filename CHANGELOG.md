@@ -4,7 +4,24 @@ Versioning is `0.<iteration>.<minor>`. Dates are release dates.
 
 ---
 
-## 0.6.0 — Agent and Tool Foundation (unreleased)
+## 0.6.1 — Mod listing metadata
+
+Metadata-only. The code, and the assemblies, are identical to 0.6.0.
+
+- **FIXED — the in-game mod list showed v0.5.2 with no 0.6.0 notes.** A mod states its
+  version in three independent places: `About.xml <modVersion>`, the description embedded
+  in `About.xml` (what RimWorld's mod list displays), and the Workshop description. The
+  0.6.0 release updated the first and third but not the second, so the mod list kept
+  showing the old version and changelog. All three now agree across every mod, and
+  `verify-metadata.ps1` fails a release when they do not.
+- **Roadmap updated.** 0.7 is now *Regions and Territories Compatibility* — making the
+  territory layer work cleanly alongside other major world and faction mods, which is the
+  groundwork the Factions work depends on (Factions will build on the Empire mod). Logic
+  Externalization moves to 0.8 and Emergent Systems and Content to 0.9.
+
+---
+
+## 0.6.0 — Agent and Tool Foundation
 
 The whole 0.6 milestone: an in-game agent that plans and carries out multi-step work itself — composing scripts that call registered tools, waiting on game conditions, observing what happened, and continuing — instead of firing one-shot tool calls. Every prompt it builds is budgeted, and the whole thing is designed to stay usable on a 2k context window.
 
