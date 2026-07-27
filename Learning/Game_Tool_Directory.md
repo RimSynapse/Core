@@ -1,8 +1,29 @@
-# MCP Tool-Calling Endpoints (Plain English Queries)
+# Game Tool Directory (Plain English Queries)
 
-RimSynapse Core implements a **Model Context Protocol (MCP)** tool-calling engine. When you chat with your colonists, or when the AI Storyteller evaluates the colony, the LLM does not need to guess or hoard pre-calculated data. Instead, it dynamically queries the game state using registered tools.
+RimSynapse Core implements a **native tool-calling engine**. When you chat with your colonists, or when the AI storyteller evaluates the colony, the LLM does not need to guess or hoard pre-calculated data. Instead, it dynamically queries the game state using registered game tools.
 
-Below is the list of all MCP endpoints currently registered in Core, along with **plain English instructions** you can use to prompt the LLM to invoke them.
+The registry holds well over a hundred tools, contributed by Core and every companion mod. The model never sees the whole list at once — discovery is **two-stage**: the first prompt names only the tools a request is likely to need (chosen by a search index), and everything else is reachable from within the conversation.
+
+---
+
+## 0. Discovery and Utility Tools
+
+### `list_available_tools`
+- **What it does**: Searches the full tool directory by query and returns compact name-and-summary matches.
+- **Plain English Prompt Examples**:
+  - *"Search your tools for anything related to weather."*
+  - *"What tools do you have for managing animals?"*
+
+### `describe_tool`
+- **What it does**: Returns a single tool's full description and argument schema by name.
+- **Plain English Prompt Examples**:
+  - *"Describe the fire_incident tool and its arguments."*
+
+### `execute_game_tool`
+- **What it does**: Runs any registered tool by name — the escape hatch for tools not listed in the current prompt. Counts as a mutating tool, so autonomous runs cannot use it to bypass the mutation gate.
+
+### `get_stored_result`
+- **What it does**: Retrieves the full text behind a `res_N` handle. Oversized tool results travel to the model as an excerpt plus a handle; this tool fetches the rest on demand.
 
 ---
 
@@ -62,7 +83,7 @@ Below is the list of all MCP endpoints currently registered in Core, along with 
 ## 4. Colonist Possession and Breakdowns
 
 ### `possess_colonist`
-- **What it does**: Directs a colonist to perform a specific action (move, attack, draft, undraft) and locks out player manual overrides. Control is automatically released on condition triggers (Damage, Downed, ExtremeMood, Hunger, Exhaustion, Bleeding, EnemyNearby, TargetReached, or Timer).
+- **What it does**: Directs a colonist to perform a specific action (move, attack, draft, undraft) and locks out player manual overrides. Control is automatically released on condition triggers (Damage, Downed, ExtremeMood, Hunger, Exhaustion, Bleeding, EnemyNearby, TargetReached, or Timer). Flagged as mutating.
 - **Plain English Prompt Examples**:
   - *"Possess John and force him to draft and walk to the geyser at (12, 45). Release him if he takes damage."*
   - *"Order Sarah to attack the hostiles. Keep her possessed until the enemy is nearby or she gets downed."*
