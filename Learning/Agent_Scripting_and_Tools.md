@@ -1,29 +1,6 @@
-# RimSynapse — Companion Mod Builder Guide
+# Agent, Scripting and Tools — Mod Builder Guide
 
-> **Purpose:** the reference for building companion mods on RimSynapse Core's agent and tool foundation (the 0.6 surface).
-> This document mirrors the in-game wiki page **Agent Scripting and Tools** (`Learning/Agent_Scripting_and_Tools.md`, injected into RimWorld's Learning Helper) — keep the two in sync when editing either.
-
----
-
-## The ecosystem
-
-```
-Core                      ← LLM client, request queue, tool registry, script runner,
-│                           agent loop, capability tiers, context/event tracking
-│
-├── Psychology            ← pawn personality, weighted memories, evaluations
-│   └── Conversations     ← in-game dialogue UI (requires Core + Psychology)
-│
-├── Factions              ← faction motivations, diplomacy, population density, map modes
-├── Regions-and-Territories ← territory mechanics
-├── WorldNews             ← planetary news feed and world events
-├── NVIDIA-Tool           ← GPU/VRAM stats feeding Core's hardware awareness
-│
-├── TestRunner            ← dev-only in-game test suite (loads last, needs -synapse-test)
-└── Repo-MCP              ← developer tooling: build/launch/log harness, external MCP server
-```
-
-Storyteller mechanisms are embedded in Core — the separate RimSynapse-StoryTeller repo is deprecated. Companion repos commit their built `Assemblies/*.dll`; Core's DLLs ship as GitHub Release assets.
+This is the guide for companion mods building on RimSynapse Core's agent and tool foundation (the 0.6 surface). Everything here also exists on GitHub as `docs/COMPANION_MODS.md` — the two are kept in sync.
 
 ---
 
@@ -42,48 +19,25 @@ Design your features as hooks first. Reach for the agent when reality diverges.
 
 ## 2. Registering game tools
 
-`SynapseToolRegistry` is the shared directory of everything the LLM can do in the game. Register during startup (your Mod constructor or a `[StaticConstructorOnStartup]`):
+`SynapseToolRegistry` is the shared directory of everything the LLM can do in the game. Register during startup (your Mod constructor or a StaticConstructorOnStartup):
 
-```csharp
-SynapseToolRegistry.RegisterTool(
-    "get_herd_status",
-    "Returns the colony's animal herds: species, counts, health and training.",
-    new Dictionary<string, object>
-    {
-        ["type"] = "object",
-        ["properties"] = new Dictionary<string, object>
-        {
-            ["species"] = new Dictionary<string, object>
-            {
-                ["type"] = "string",
-                ["description"] = "Optional species filter, e.g. 'Muffalo'."
-            }
-        }
-    },
-    argsJson => BuildHerdReportJson(argsJson),
-    isDebug: false,
-    keywords: new List<string> { "animals", "herd", "livestock", "pets" });
-
-// Anything that CHANGES game state uses the overload with the isMutating flag:
-SynapseToolRegistry.RegisterTool(
-    "cull_herd", "...", schema, handler,
-    isDebug: false, keywords: null, isMutating: true);
-```
+- `SynapseToolRegistry.RegisterTool(name, description, parametersSchema, handler)` — with optional `isDebug` and `keywords` parameters.
+- `SynapseToolRegistry.RegisterTool(name, description, parametersSchema, handler, isDebug, keywords, isMutating)` — the overload that also flags the tool as **mutating** (it changes game state).
 
 Details that matter:
 
 - **name** — snake_case, prefixed by intent: `get_` / `search_` / `list_` for read-only queries. Read-only prefixes make your tool eligible for pre-seeding (section 8), which can save the agent a whole turn.
-- **parametersSchema** — a JSON-Schema-shaped object (`type: "object"` with a `properties` dictionary). It is shown to the model by `describe_tool` and used to *warn* about undeclared script arguments, so keep it accurate.
+- **parametersSchema** — a JSON-Schema-shaped object: a dictionary with `type: "object"` and a `properties` dictionary describing each argument. The schema is shown to the model by `describe_tool` and used to *warn* about undeclared script arguments, so keep it accurate.
 - **handler** — takes the arguments as a JSON string, returns a JSON string. The contract:
   - Return valid JSON even for empty arguments.
   - **Never throw.** Report failure as an error payload: `{"error": "reason"}`. `ExecuteTool` never throws either — callers rely on that.
   - The whole-registry test suite executes every non-debug tool with empty and malformed arguments; your handler must survive both.
-- **keywords** — feed the tool search index. The agent's first prompt only names the tools a request is *likely* to need (chosen by index search); everything else is found by searching from within the conversation (`list_available_tools`, `describe_tool`, `execute_game_tool`). Good keywords are how your tool gets found.
+- **keywords** — feed the tool search index. The agent's first prompt only names the tools a request is *likely* to need (chosen by index search); everything else is found by searching from within the conversation. Good keywords are how your tool gets found.
 - **isMutating** — flag anything that changes game state. Autonomous runs (escalations, background evaluations) are barred from mutating tools unless the player enables *Allow autonomous mutations* in settings. Player-initiated runs may always mutate. An unflagged mutator is a hole in that gate.
 
 Also available: `IsToolRegistered(name)`, `ExecuteTool(name, argsJson)` and `ExecuteTool(name, argsJson, allowMutating)`.
 
-> **Binary compatibility warning**: your DLL binds to Core's *exact* method signatures. Core never alters an existing public signature (new capability arrives as new overloads — `RegisterTool`, `StartScript` and `ExecuteTool` all follow this pattern), and your mod should follow the same rule for any API it exposes. Appending an optional parameter to an existing public method silently removes the old signature from the assembly and breaks every DLL bound to it — this has happened; the `Core_AllModsInstantiated` sentinel test exists because of it.
+**Binary compatibility warning**: your DLL binds to Core's *exact* method signatures. Core never alters an existing public signature (new capability arrives as new overloads), and your mod should follow the same rule for any API it exposes — appending an optional parameter to an existing public method silently removes the old signature and breaks every assembly bound to it.
 
 ---
 
@@ -96,36 +50,17 @@ The model drives multi-step work by emitting a script: a `scriptName` plus a lis
 - **wait_until** — pauses the script until a condition holds: `condition`, `pawnName`, `timeoutTicks` (default 3000). On timeout the script continues to the next step.
 - **resultKey** — any tool step may include it; the result is stored and surfaced in the completion log the agent sees on its next turn.
 
-```json
-{
-  "scriptName": "Fetch and equip",
-  "steps": [
-    { "type": "possess_colonist",
-      "arguments": { "pawnName": "Dole", "action": "equip", "targetItemName": "shotgun" } },
-    { "type": "wait_until",
-      "arguments": { "condition": "has_weapon", "pawnName": "Dole", "timeoutTicks": 6000 } },
-    { "type": "call_tool",
-      "arguments": { "tool": "get_colonists_profile", "arguments": {}, "resultKey": "after" } }
-  ]
-}
-```
-
 Validation is deliberately asymmetric:
 
 - **Structural steps are strict.** Unknown fields on `wait_until` or `call_tool` reject the whole script before anything executes, naming the step number and field. The rejection flows to the caller through the normal log/finish chain, so an agent run sees the errors as feedback and can correct the shape.
 - **Tool-step arguments only warn.** An argument not in the tool's declared schema logs a warning but does not block — registered schemas are not all complete, and tools already answer bad input with error payloads.
-- **Legacy aliases** (`equip_item`, `damage_self`, `clear_queue` and friends) are rewritten up front and each rewrite is logged. New content should use the declared schema.
+- **Legacy aliases** (equip_item, damage_self, clear_queue and friends) are rewritten up front and each rewrite is logged. New content should use the declared schema.
 
 ---
 
 ## 4. Custom wait conditions
 
-```csharp
-SynapseScriptRunner.RegisterWaitCondition("herd_gathered",
-    (pawn, args) => HerdIsGatheredNear(pawn, args));
-```
-
-The evaluator receives the resolved pawn and the step's arguments and returns a bool. Registered conditions automatically appear in the step schema the model is shown — no prompt edits needed.
+`SynapseScriptRunner.RegisterWaitCondition(name, evaluator)` adds a condition your mod owns. The evaluator receives the resolved pawn and the step's arguments and returns a bool. Registered conditions automatically appear in the step schema the model is shown — no prompt edits needed.
 
 Built-in conditions: `has_weapon`, `has_ranged_weapon`, `has_any_weapon`, `reached_cell`, `pawn_downed`.
 
@@ -146,28 +81,20 @@ Built-in conditions: `has_weapon`, `has_ranged_weapon`, `has_any_weapon`, `reach
 `SynapseLlmPlanner` drives the plan→execute→observe loop. What mod builders should know:
 
 - **Budgets**: every run is bounded by the *Agent max turns* (default 8) and *Agent max requests per run* (default 12) settings, and `Cancel()` stops a run at its next loop entry.
-- **Autonomous runs** (constructor flag `isAutonomous`) are for anything the player did not directly initiate. They respect the autonomous-mutation gate.
+- **Autonomous runs** (constructor flag) are for anything the player did not directly initiate. They respect the autonomous-mutation gate.
 - **The run inspector**: `SynapseAgentRunLog` records every run — the plan each turn emitted, each executed action with error payloads marked, the outcome fed back, and budget usage. Players see it in the Script Debugger's *Agent Runs* view. Your escalations and scripts show up there automatically; keep your log lines meaningful because they are what the player reads when diagnosing.
 
 ---
 
 ## 7. Escalation: when reality diverges
 
-When your programmed path gets a response it cannot apply — a missing field, an outcome that matches no branch — hand it to the agent:
+When your programmed path gets a response it cannot apply — a missing field, an outcome that matches no branch — call:
 
-```csharp
-bool started = SynapseAgentEscalation.Escalate(new SynapseEscalationContext
-{
-    Origin = "Psychology.CeremonyRecord",
-    Expectation = "a ceremony record with an overallRecord narrative",
-    Observation = rawResponseExcerpt,           // large payloads are abbreviated automatically
-    SuggestedGoal = "salvage a one-line ceremony record from the response",
-});
-```
+- `SynapseAgentEscalation.Escalate(context)` with a `SynapseEscalationContext`: `Origin` (your system and call site, e.g. "Psychology.CeremonyRecord"), `Expectation` (what you were trying to produce), `Observation` (what actually happened — large payloads are abbreviated automatically), and optional `SuggestedGoal`.
 
-`Escalate` returns true if an agent run started, false if refused — and it **never throws**, so the call is safe on any failure path. Keep your original warning log either way; escalation is an addition, not a replacement.
+It returns true if an agent run started, false if refused — and it **never throws**, so the call is safe on any failure path. Keep your original warning log either way; escalation is an addition, not a replacement.
 
-Guardrails you should design around: escalation is a **default-off** player setting, rate-limited by a cooldown (default 120 s) and a per-session cap (default 10), and refused outright on the Minimal capability tier. Treat a refused escalation as the normal case — your fallback path must remain correct without the agent.
+Guardrails you should design around: escalation is a **default-off** player setting, rate-limited by a cooldown and a per-session cap, and refused outright on the Minimal capability tier. Treat a refused escalation as the normal case — your fallback path must remain correct without the agent.
 
 ---
 
@@ -190,20 +117,10 @@ The log is machine-read by the test harness, so format matters:
 - Handled warnings must not look like thrown exceptions: log `[ExceptionTypeName] message`, never `ExceptionTypeName: message`.
 - Tool failures are error payloads, never exceptions; never log an error payload under a `[Result]` prefix.
 - Use `SynapseLogger.Message/Warning(msg, category)`; agent and performance lines use the `performance` category.
-- Every behavior change lands with an in-game TestRunner case (`<Repo>_<CaseName>`); the suite must end with 0 blocking entries. Case-writing rules live in the TestRunner repo.
-
-The development loop (harness in the Repo-MCP repo):
-
-```powershell
-.\harness\build.ps1              # all mods, dependency order: Core -> Regions -> companions -> Factions
-.\harness\launch.ps1 -Test       # rotates Player.log, runs the in-game suite, self-terminates
-.\harness\readlog.ps1            # classifies the log; exit 1 on blocking entries or FAILed cases
-```
-
-Work lands on `development` via PRs; `main` only via release promotion. Versioning is `0.<iteration>.<minor>`.
+- Every behavior change lands with an in-game TestRunner case (`<Repo>_<CaseName>`); the suite must end with 0 blocking entries. See the TestRunner repo for case-writing rules.
 
 ---
 
 ## 10. Publishing your own in-game docs
 
-Any mod that ships a `Learning/` folder of `.md` files gets them injected into RimWorld's Learning Helper automatically at startup — headings, bullets, bold/italic and blockquotes render; code fences and images do not (keep the in-game copies fence-free). Keep a matching copy in your repo so the in-game docs and GitHub never drift — exactly as this document mirrors `Learning/Agent_Scripting_and_Tools.md`.
+Everything you are reading is a plain markdown file. Any mod that ships a `Learning/` folder of `.md` files gets them injected into RimWorld's Learning Helper automatically at startup — headings, bullets, bold/italic and blockquotes render; code fences and images do not. Keep a matching copy in your repo so the in-game docs and GitHub never drift.
