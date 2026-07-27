@@ -123,6 +123,31 @@ namespace RimSynapse
         {
             if (script == null || script.steps == null || script.steps.Count == 0) return;
 
+            // Normalise legacy aliases up front (each rewrite is logged), then check the
+            // script against the declared step schema. A script that fails validation is
+            // refused with every error named — onFinished still runs, so an agent chain
+            // receives the errors through its normal feedback and can correct the shape.
+            SynapseScriptValidator.NormalizeAliases(script, logCallback);
+            var errors = SynapseScriptValidator.Validate(script, logCallback);
+            if (errors.Count > 0)
+            {
+                logCallback?.Invoke($"[Script Runner] Script '{script.scriptName}' rejected — {errors.Count} validation error(s):");
+                foreach (var error in errors)
+                {
+                    logCallback?.Invoke($"[Script Runner]   {error}");
+                }
+                SynapseLogger.Warning($"Script '{script.scriptName}' rejected: {string.Join(" | ", errors)}", "performance");
+                try
+                {
+                    onFinished?.Invoke();
+                }
+                catch (Exception ex)
+                {
+                    logCallback?.Invoke($"[Error] onFinished after rejection failed: {ex.Message}");
+                }
+                return;
+            }
+
             var active = new ActiveScript
             {
                 script = script,
@@ -275,32 +300,7 @@ namespace RimSynapse
                     continue;
                 }
 
-                // Alias Normalization
-                if (step.type.Equals("equip_item", StringComparison.OrdinalIgnoreCase) || 
-                    step.type.Equals("equip_weapon", StringComparison.OrdinalIgnoreCase) ||
-                    step.type.Equals("equip", StringComparison.OrdinalIgnoreCase))
-                {
-                    step.type = "possess_colonist";
-                    if (step.arguments == null) step.arguments = new Dictionary<string, object>();
-                    step.arguments["action"] = "equip";
-                    if (step.arguments.TryGetValue("weaponName", out var wn)) step.arguments["targetItemName"] = wn;
-                    if (step.arguments.TryGetValue("itemName", out var itn)) step.arguments["targetItemName"] = itn;
-                    if (step.arguments.TryGetValue("weaponDef", out var wd)) step.arguments["targetItemDef"] = wd;
-                    if (step.arguments.TryGetValue("itemDef", out var itd)) step.arguments["targetItemDef"] = itd;
-                    if (!step.arguments.ContainsKey("commandName")) step.arguments["commandName"] = "Equipping Weapon";
-                }
-                else if (step.type.Equals("damage_self", StringComparison.OrdinalIgnoreCase))
-                {
-                    step.type = "damage_self_with_equipped";
-                }
-                else if (step.type.Equals("clear_queue", StringComparison.OrdinalIgnoreCase) || 
-                         step.type.Equals("stop_movement", StringComparison.OrdinalIgnoreCase))
-                {
-                    step.type = "possess_colonist";
-                    if (step.arguments == null) step.arguments = new Dictionary<string, object>();
-                    step.arguments["action"] = "clear";
-                    if (!step.arguments.ContainsKey("commandName")) step.arguments["commandName"] = "Stopping Command";
-                }
+                // Aliases were normalised (and logged) by the validator at StartScript.
 
                 if (step.type.Equals("wait_until", StringComparison.OrdinalIgnoreCase))
                 {
