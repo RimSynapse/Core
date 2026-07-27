@@ -30,13 +30,24 @@ namespace RimSynapse
         /// the budget is tracked separately so multi-request turns stay bounded too.</summary>
         private static int MaxRequests => Math.Max(1, RimSynapseMod.Instance?.Settings?.agentMaxRequestsPerRun ?? 12);
 
+        /// <summary>Identifies this run in <see cref="SynapseAgentRunLog"/>, the inspector's backing model.</summary>
+        public int RunId { get; }
+
         public SynapseLlmPlanner(string command, Action<string> logCallback, Action<bool, string> onComplete, bool isAutonomous = false)
         {
             _command = command;
             _logCallback = logCallback;
-            _onComplete = onComplete;
             _messages = new List<ChatMessage>();
             IsAutonomous = isAutonomous;
+
+            // Every completion path funnels through _onComplete, so wrapping it here is the
+            // one place the run log reliably learns a run's terminal state.
+            RunId = SynapseAgentRunLog.BeginRun(command, isAutonomous, this);
+            _onComplete = (ok, msg) =>
+            {
+                SynapseAgentRunLog.EndRun(RunId, ok, msg);
+                onComplete?.Invoke(ok, msg);
+            };
         }
 
         /// <summary>
@@ -315,6 +326,7 @@ namespace RimSynapse
                 return;
             }
             _requestsIssued++;
+            SynapseAgentRunLog.RecordTurnStart(RunId, _turnsCount, MaxTurns, _requestsIssued, MaxRequests);
 
             _logCallback?.Invoke($"[API Agent] Invoking LLM (Turn {_turnsCount})...");
 

@@ -21,6 +21,10 @@ namespace RimSynapse
         {
             string json = RimSynapse.Utils.JsonHelper.ExtractJson(responseContent);
 
+            // The turn's plan, as emitted — the inspector shows it verbatim rather than
+            // reconstructing it from what ended up executing.
+            SynapseAgentRunLog.RecordPlan(planner?.RunId ?? 0, responseContent);
+
             if (string.IsNullOrEmpty(json))
             {
                 logCallback?.Invoke($"[Assistant] {responseContent}");
@@ -85,11 +89,15 @@ namespace RimSynapse
                         {
                             logCallback?.Invoke(msg);
                             scriptLog.Add(msg);
+                            // Per-step results, error payloads included, flow to the
+                            // inspector as they happen — not only after the script ends.
+                            SynapseAgentRunLog.RecordAction(planner?.RunId ?? 0, msg);
                         }, () =>
                         {
                             // Long script logs become excerpt + handle: the model rarely needs
                             // every line, and on a small window it cannot afford them.
                             string scriptOutcome = SynapseResultStore.AbbreviateIfLarge(string.Join("\n", scriptLog), 1200);
+                            SynapseAgentRunLog.RecordOutcome(planner?.RunId ?? 0, scriptOutcome);
                             messages.Add(ChatMessage.User($"Script execution finished. Logs:\n{scriptOutcome}\n\nPlease review and either generate next tool calls/script, or respond with a final summary if done."));
                             planner.RunAgentLoop(options);
                         }, allowMutatingTools: allowMutating);
@@ -152,6 +160,7 @@ namespace RimSynapse
 
             if (response == null || response.calls == null || response.calls.Count == 0)
             {
+                SynapseAgentRunLog.RecordOutcome(planner?.RunId ?? 0, "[] (No actions resolved)");
                 messages.Add(ChatMessage.User("Execution outcomes of the action plan:\n[] (No actions resolved)\n\nPlease review and either generate next tool calls, or respond with a final summary if done."));
                 planner.RunAgentLoop(options);
                 return;
@@ -186,9 +195,11 @@ namespace RimSynapse
                         arguments = call.arguments,
                         result = outcome
                     });
+                    SynapseAgentRunLog.RecordAction(planner?.RunId ?? 0, $"{call.tool}: {outcome}");
                 }
 
                 string outcomesJson = JsonConvert.SerializeObject(outcomes);
+                SynapseAgentRunLog.RecordOutcome(planner?.RunId ?? 0, outcomesJson);
                 string followUpPrompt = $@"Execution outcomes of the action plan:
 {outcomesJson}
 
