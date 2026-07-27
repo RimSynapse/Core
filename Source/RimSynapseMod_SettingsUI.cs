@@ -119,6 +119,22 @@ namespace RimSynapse
                 ref Settings.allowAutonomousMutations,
                 "Autonomous agent runs (not started by you directly) are refused state-mutating tools unless this is on. Direct Action Console commands are always allowed.");
 
+            listing.CheckboxLabeled("Enable escalation to the agent (EXPERIMENTAL)",
+                ref Settings.enableEscalation,
+                "When a programmed system hits an outcome it was not built for (e.g. a ceremony record the model failed to write), it may hand the situation to the agent instead of dropping it. Rate-limited and tier-gated; escalated runs cannot change game state unless the setting above is also on.");
+
+            if (Settings.enableEscalation)
+            {
+                Settings.escalationCooldownSeconds = (int)listing.SliderLabeled(
+                    $"  Escalation cooldown: {Settings.escalationCooldownSeconds}s",
+                    Settings.escalationCooldownSeconds, 10f, 600f,
+                    tooltip: "Minimum seconds between escalated runs, so a broken backend cannot convert every failing hook into an agent run.");
+                Settings.escalationSessionCap = (int)listing.SliderLabeled(
+                    $"  Escalations per session: {Settings.escalationSessionCap}",
+                    Settings.escalationSessionCap, 1f, 50f,
+                    tooltip: "Hard cap on escalated runs per game session.");
+            }
+
             listing.CheckboxLabeled("Enable storyteller tool usage",
                 ref Settings.enableStorytellerTools,
                 "When enabled, allows the AI storyteller to invoke tools to query precise game data. " +
