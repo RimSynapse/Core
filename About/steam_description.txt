@@ -1,5 +1,5 @@
 [b]Discord Community:[/b] [url=https://discord.gg/eVBebZ2N9s]https://discord.gg/eVBebZ2N9s[/url]
-[b]Version:[/b] v0.6.0 (Target: RimWorld 1.6)
+[b]Version:[/b] v0.6.1 (Target: RimWorld 1.6)
 
 [h1]RimSynapse - Core[/h1]
 [b][url=https://github.com/RimSynapse/Core/wiki]Official Wiki and Documentation[/url][/b]
@@ -40,14 +40,22 @@ The LLM Direct Action Console acts as an AI-powered command center. You simply o
 
 [h2]Roadmap[/h2]
 [list]
-[*] [b]0.6 - Agent and Tool Foundation:[/b] ✅ Delivered in v0.6.0 - see the changelog below.
-[*] [b]0.7 - Logic Externalization:[/b] Retiring hardcoded thresholds so the storyteller reasons about your colony's situation instead of following fixed rules.
-[*] [b]0.8 - Emergent Systems and Content:[/b] Faction archetypes for each DLC, caravans that travel the world map, settlement crises, faction capitals and travelling leaders, and richer colonist social dynamics.
+[*] [b]0.6 - Agent and Tool Foundation:[/b] ✅ Delivered in v0.6.0.
+[*] [b]0.7 - Regions and Territories Compatibility:[/b] Making the territory layer work cleanly alongside other major world and faction mods. A large undertaking on its own, and the groundwork everything faction-related depends on - the Factions work will build on the Empire mod.
+[*] [b]0.8 - Logic Externalization:[/b] Retiring hardcoded thresholds so the storyteller reasons about your colony's situation instead of following fixed rules.
+[*] [b]0.9 - Emergent Systems and Content:[/b] Faction archetypes for each DLC, caravans that travel the world map, settlement crises, faction capitals and travelling leaders, and richer colonist social dynamics.
 [/list]
 These ship when they are ready - no dates.
 
 ---
 
+[h2]Changelog (v0.6.1)[/h2]
+[list]
+[*] [b]FIXED - mod list metadata:[/b] The in-game mod list still showed v0.5.2 with no v0.6.0 notes. Version and changelog now agree in every place they are stated.
+[*] [b]Roadmap updated:[/b] 0.7 is now Regions and Territories compatibility - the groundwork the Factions work depends on. Everything after it shifts up one release.
+[/list]
+
+---
 [h2]Changelog (v0.6.0) - Agent and Tool Foundation[/h2]
 [b]The storyteller can now plan and carry out multi-step work on its own - and it is built to stay fast on modest hardware.[/b]
 

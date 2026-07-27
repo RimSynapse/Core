@@ -4,7 +4,7 @@
     <author>RimSynapse Team</author>
     <packageId>RimSynapse.Core</packageId>
     <url>https://github.com/RimSynapse/Core</url>
-    <modVersion>0.6.0</modVersion>
+    <modVersion>0.6.1</modVersion>
     <supportedVersions>
         <li>1.5</li>
         <li>1.6</li>
@@ -30,7 +30,7 @@
     </incompatibleWith>
     <description>
 Discord Community: https://discord.gg/eVBebZ2N9s
-Version: v0.5.2 (Target: RimWorld 1.6)
+Version: v0.6.1 (Target: RimWorld 1.6)
 
 RimSynapse - Core
 Official Wiki and Documentation: https://github.com/RimSynapse/Core/wiki
@@ -57,6 +57,22 @@ RimSynapse Core is a powerful, asynchronous background engine that natively brin
 AI is incredibly cool, and having a framework to utilize powerful, no-cost local models really appealed to me. RimWorld is relatively light on GPU overhead, making it the absolute perfect candidate to max out those graphics cards by running a local LLM in the background. My goal with RimSynapse is to push the boundaries of emergent storytelling using the hardware you already own.
 
 --- Changelog ---
+v0.6.1
+- Fixed: the in-game mod list showed v0.5.2 with no 0.6.0 notes; version and changelog now agree everywhere
+- Roadmap updated: 0.7 is Regions and Territories compatibility (groundwork for Factions, which will require Empire)
+v0.6.0 - Agent and Tool Foundation
+- NEW: Multi-step plans that call game tools, wait on game conditions, see the result and continue
+- NEW: Plans survive saving and loading, resuming at the right step without instantly timing out
+- NEW: Turn limits, a per-run request budget and a stop button
+- NEW: Autonomous actions cannot change your colony unless you enable "Allow autonomous mutations"
+- NEW: Scripted features escalate to the agent when they hit something they were never taught to handle (off by default)
+- NEW: Agent Runs inspector in the Script Debugger - what it decided, ran, observed and spent, plus cancel
+- NEW: Capability tiers chosen from measured response times; designed down to a 2k context window
+- NEW: Conversations prioritised (sub-500ms target); background work fits the in-game night and yields to you
+- NEW: Cloud APIs budgeted by token cost, with an experimental toggle to ignore cost
+- Fixed: mistyped tools looked like successes and malformed plans were dropped silently
+- Fixed: restored a public constructor signature so mods built against 0.5.x keep working
+- Compatible with 0.5.x saves; companion mods verified against their published builds
 v0.5.2
 - Fixed: Core failed to load entirely when a Harmony patch bound the wrong parameter name
 - Fixed: wiki guides in the Learning Helper threw an exception every frame
@@ -79,9 +95,10 @@ v0.1.0
 - Initial Release (Core framework, NVIDIA Tool, and Psychology module)
 
 --- Roadmap and Future Goals ---
-0.6 - Agent and Tool Foundation: an in-game agent that plans and carries out multi-step actions on its own, backed by a growing library of tools it can query for colony, faction and world state.
-0.7 - Logic Externalization: retiring hardcoded thresholds so the storyteller reasons about your colony situation instead of following fixed rules.
-0.8 - Emergent Systems and Content: faction archetypes for each DLC, caravans that travel the world map, settlement crises, faction capitals and travelling leaders, and richer colonist social dynamics.
+0.6 - Agent and Tool Foundation: Delivered in v0.6.0.
+0.7 - Regions and Territories Compatibility: making the territory layer work cleanly alongside other major world and faction mods. A large undertaking on its own, and the groundwork everything faction-related depends on - the Factions work will build on the Empire mod.
+0.8 - Logic Externalization: retiring hardcoded thresholds so the storyteller reasons about your colony situation instead of following fixed rules.
+0.9 - Emergent Systems and Content: faction archetypes for each DLC, caravans that travel the world map, settlement crises, faction capitals and travelling leaders, and richer colonist social dynamics.
 
 These ship when they are ready - no dates.
 
