@@ -18,6 +18,13 @@ namespace RimSynapse
         public Func<string, string> handler;
         public bool isDebugAction = false;
         public List<string> keywords = new List<string>();
+
+        /// <summary>
+        /// True when calling this tool changes game state (as opposed to reading it).
+        /// Autonomous runs may be barred from mutating tools via settings; player-initiated
+        /// runs are unaffected.
+        /// </summary>
+        public bool isMutating = false;
     }
 
     /// <summary>
@@ -31,7 +38,42 @@ namespace RimSynapse
 
         public static Func<Pawn, string, string, int?, int?, bool> CustomBreakHandler;
 
+        // Kept binary-compatible: companion mods are compiled against this exact signature,
+        // so isMutating is a separate overload rather than an appended optional parameter
+        // (adding one removes the old method from the assembly and breaks existing DLLs).
         public static void RegisterTool(string name, string description, object parametersSchema, Func<string, string> handler, bool isDebug = false, List<string> keywords = null)
+        {
+            RegisterToolCore(name, description, parametersSchema, handler, isDebug, keywords);
+            SynapseToolIndex.Invalidate();
+        }
+
+        public static void RegisterTool(string name, string description, object parametersSchema, Func<string, string> handler, bool isDebug, List<string> keywords, bool isMutating)
+        {
+            RegisterToolCore(name, description, parametersSchema, handler, isDebug, keywords);
+            if (isMutating && _tools.TryGetValue(name, out var registered))
+            {
+                registered.isMutating = true;
+            }
+            SynapseToolIndex.Invalidate();
+        }
+
+        /// <summary>
+        /// Flag already-registered tools as state-mutating by name. Unknown names are
+        /// ignored, so the manifest can safely mention tools other mods may not register.
+        /// </summary>
+        public static void MarkMutating(params string[] names)
+        {
+            EnsureInitialized();
+            foreach (var n in names)
+            {
+                if (!string.IsNullOrEmpty(n) && _tools.TryGetValue(n, out var tool))
+                {
+                    tool.isMutating = true;
+                }
+            }
+        }
+
+        private static void RegisterToolCore(string name, string description, object parametersSchema, Func<string, string> handler, bool isDebug, List<string> keywords)
         {
             EnsureInitialized();
             _tools[name] = new GameTool
@@ -63,11 +105,38 @@ namespace RimSynapse
             }
         }
 
+        /// <summary>
+        /// Whether a tool is registered. Callers that dispatch a caller-supplied name should
+        /// check this first: ExecuteTool answers an unknown name with an error payload rather
+        /// than throwing, which is easy to mistake for a tool's own output.
+        /// </summary>
+        public static bool IsToolRegistered(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            EnsureInitialized();
+            return _tools.ContainsKey(name);
+        }
+
         public static string ExecuteTool(string name, string argumentsJson)
+        {
+            return ExecuteTool(name, argumentsJson, allowMutating: true);
+        }
+
+        /// <summary>
+        /// Execute a tool, optionally refusing state-mutating ones. Autonomous callers
+        /// (escalations, pre-seeding) pass allowMutating: false unless the player has
+        /// enabled autonomous mutations in settings.
+        /// </summary>
+        public static string ExecuteTool(string name, string argumentsJson, bool allowMutating)
         {
             EnsureInitialized();
             if (_tools.TryGetValue(name, out var tool))
             {
+                if (!allowMutating && tool.isMutating)
+                {
+                    return $"{{\"error\": \"Tool '{name}' changes game state and this run is not permitted to mutate. Use a read-only tool, or the player can enable 'Allow autonomous mutations' in settings.\"}}";
+                }
+
                 try
                 {
                     return tool.handler(argumentsJson);
@@ -87,6 +156,7 @@ namespace RimSynapse
 
             // Register Built-in Tools
             RegisterMetaTools();
+            RegisterResultTools();
             RegisterColonistTools();
             RegisterStockpileTools();
             RegisterThreatTools();
@@ -105,6 +175,16 @@ namespace RimSynapse
 
             // Centralized synonym keyword registrations
             AssignDefaultKeywords();
+
+            // Mutating manifest: the direct-action tools that change game state.
+            // execute_game_tool is included because it can invoke anything by name —
+            // leaving it unflagged would let a gated run launder mutations through it.
+            // Companion mods flag their own via RegisterTool(..., isMutating: true).
+            MarkMutating(
+                "possess_colonist",
+                "damage_self_with_equipped",
+                "modify_pawn_state",
+                "execute_game_tool");
         }
 
         private static void AssignDefaultKeywords()

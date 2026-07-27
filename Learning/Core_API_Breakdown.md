@@ -181,7 +181,20 @@ Core provides a unified framework for fetching and caching dynamically generated
 
 ---
 
-## 9. Factions Mod Population Density Integration
+## 9. Game Tools, Scripts and the Agent (0.6 Foundation)
+
+The agent and tool foundation has its own dedicated guide — see **Agent Scripting and Tools** in this wiki (mirrored on GitHub as `docs/COMPANION_MODS.md`). The short map:
+
+- **`SynapseToolRegistry`** — register game tools the LLM can call (`RegisterTool`, with `keywords` for the search index and an `isMutating` flag for the autonomous-mutation gate). Handlers return JSON and never throw; failures are `{"error": ...}` payloads.
+- **`SynapseScriptRunner`** — executes the model's multi-step scripts with `wait_until` conditions, validates them against the declared step schema before running, persists them across save/load, and accepts custom wait conditions via `RegisterWaitCondition`.
+- **`SynapseLlmPlanner`** — the agent loop: turn and request budgets from settings, `Cancel()`, autonomous-run gating.
+- **`SynapseAgentEscalation`** — programmed paths hand unexpected outcomes to the agent via `Escalate(context)`; default-off, rate-limited, never throws.
+- **`SynapseAgentRunLog`** — the run inspector's backing model; every run's turns, actions, and budget state, rendered in the Script Debugger's *Agent Runs* view.
+- **`SynapseTierController` / `SynapseResultStore`** — measured capability tiers with per-class operating points, and excerpt-plus-handle transport for oversized payloads.
+
+---
+
+## 10. Factions Mod Population Density Integration
 
 The population density mechanics reside in `RimSynapse-Factions` and link to Core dynamically:
 

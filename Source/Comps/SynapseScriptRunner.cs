@@ -32,6 +32,46 @@ namespace RimSynapse
             public int waitStartTick = 0;
             public Action<string> logCallback;
             public Action onFinished;
+
+            /// <summary>Results kept by a step's resultKey, surfaced in the completion log.</summary>
+            public readonly Dictionary<string, string> results = new Dictionary<string, string>();
+
+            /// <summary>Whether this script's tool steps may mutate game state.</summary>
+            public bool allowMutatingTools = true;
+
+            /// <summary>
+            /// Set on restore from a save. The next Tick re-anchors the wait timeout (or
+            /// continues execution) instead of comparing against a stale waitStartTick.
+            /// </summary>
+            public bool pendingResume = false;
+        }
+
+        /// <summary>
+        /// What was persisted for one active script. Scripts already travel as JSON (that is
+        /// the wire format the model emits), so persistence serialises this with Newtonsoft
+        /// into a single scribed string rather than scribing each field.
+        /// </summary>
+        private class PersistedScript
+        {
+            public SynapseScript script;
+            public int currentStepIndex;
+            public bool isWaiting;
+            public string waitCondition;
+            public string waitPawnName;
+            public int waitRemainingTicks;
+            public Dictionary<string, string> results;
+            public bool allowMutatingTools = true;
+        }
+
+        /// <summary>Read-only view of one active script, for persistence tests and the debugger.</summary>
+        public class SynapseScriptState
+        {
+            public string name;
+            public int currentStep;
+            public int totalSteps;
+            public bool isWaiting;
+            public string waitCondition;
+            public int remainingWaitTicks;
         }
 
         private static readonly List<ActiveScript> _activeScripts = new List<ActiveScript>();
@@ -45,7 +85,196 @@ namespace RimSynapse
             _customConditions[conditionName] = evaluator;
         }
 
+        /// <summary>
+        /// Compact step reference for the system prompt. Owned here because the runner
+        /// defines step semantics; includes dynamically registered wait conditions so
+        /// companion-added conditions are discoverable without prompt edits.
+        /// </summary>
+        public static string DescribeStepSchema()
+        {
+            var conditions = new List<string>
+            {
+                "has_weapon", "has_ranged_weapon", "has_any_weapon", "reached_cell", "pawn_downed"
+            };
+            foreach (var name in _customConditions.Keys)
+            {
+                if (!conditions.Contains(name)) conditions.Add(name);
+            }
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("Script step reference:");
+            sb.AppendLine("- Any tool name can be a step \"type\"; its \"arguments\" follow that tool's schema (inspect with describe_tool). Unknown tool names are reported and skipped.");
+            sb.AppendLine("- \"call_tool\": run a tool named in arguments — { \"tool\": \"<name>\", \"arguments\": { ... } }. Use when a tool's name collides with a step keyword.");
+            sb.AppendLine($"- \"wait_until\": pause until a condition holds — {{ \"condition\": \"<name>\", \"pawnName\": \"<pawn>\", \"timeoutTicks\": 6000 }}. Conditions: {string.Join(", ", conditions)}. On timeout the script continues to the next step.");
+            sb.AppendLine("- Any tool step may include \"resultKey\": \"<label>\" to store its result; stored and oversized results are retrieved later with get_stored_result.");
+            sb.AppendLine("Use a script when actions are sequential, wait on game state, or span time. Use flat \"calls\" only for immediate same-tick actions.");
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Abort the first active script with the given name. onFinished still runs, so a
+        /// cancelled agent chain resolves through its normal path (where the planner's
+        /// cancel flag then reports the cancellation) instead of waiting forever.
+        /// </summary>
+        public static bool AbortScript(string scriptName)
+        {
+            var active = _activeScripts.FirstOrDefault(a =>
+                string.Equals(a.script?.scriptName, scriptName, StringComparison.OrdinalIgnoreCase));
+            if (active == null) return false;
+
+            _activeScripts.Remove(active);
+            active.logCallback?.Invoke($"[Script Runner] Script '{scriptName}' aborted at step {active.currentStepIndex + 1}.");
+            try
+            {
+                active.onFinished?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                active.logCallback?.Invoke($"[Error] onFinished after abort failed: {ex.Message}");
+            }
+            return true;
+        }
+
         public static int ActiveScriptsCount => _activeScripts.Count;
+
+        public static List<SynapseScriptState> GetActiveScriptStates()
+        {
+            int now = Find.TickManager?.TicksGame ?? 0;
+            var list = new List<SynapseScriptState>();
+            foreach (var a in _activeScripts)
+            {
+                list.Add(new SynapseScriptState
+                {
+                    name = a.script?.scriptName ?? "Unnamed",
+                    currentStep = a.currentStepIndex + 1,
+                    totalSteps = a.script?.steps?.Count ?? 0,
+                    isWaiting = a.isWaiting,
+                    waitCondition = a.waitCondition,
+                    remainingWaitTicks = !a.isWaiting ? 0
+                        : a.pendingResume ? a.waitTimeoutTicks
+                        : Math.Max(0, a.waitTimeoutTicks - (now - a.waitStartTick)),
+                });
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Serialise every active script for the save, or null when there are none (so
+        /// nothing is written and pre-feature saves stay shape-identical). Any script in
+        /// the list is normally mid-wait — StartScript runs synchronously until a wait or
+        /// completion — but currentStepIndex is persisted regardless.
+        /// </summary>
+        public static string SnapshotForSave()
+        {
+            if (_activeScripts.Count == 0) return null;
+
+            int now = Find.TickManager?.TicksGame ?? 0;
+            var persisted = new List<PersistedScript>();
+            foreach (var a in _activeScripts)
+            {
+                persisted.Add(new PersistedScript
+                {
+                    script = a.script,
+                    currentStepIndex = a.currentStepIndex,
+                    isWaiting = a.isWaiting,
+                    waitCondition = a.waitCondition,
+                    waitPawnName = a.waitPawnName,
+                    // Remaining, not absolute: TicksGame in the loaded game continues from
+                    // the save, but re-anchoring from remaining time is what keeps a restored
+                    // wait from expiring instantly if anything shifts the clock.
+                    waitRemainingTicks = a.isWaiting
+                        ? Math.Max(1, a.waitTimeoutTicks - (now - a.waitStartTick))
+                        : 0,
+                    results = a.results.Count > 0 ? new Dictionary<string, string>(a.results) : null,
+                    allowMutatingTools = a.allowMutatingTools,
+                });
+            }
+
+            try
+            {
+                return JsonConvert.SerializeObject(persisted);
+            }
+            catch (Exception ex)
+            {
+                SynapseLogger.Warning($"[Script Runner] Could not serialise {persisted.Count} active script(s) for the save: [{ex.GetType().Name}] {ex.Message}", "performance");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Restore scripts persisted by <see cref="SnapshotForSave"/>. Returns how many were
+        /// restored; null/empty/unreadable input is a no-op (a pre-feature save has no entry
+        /// at all and lands here as null).
+        ///
+        /// The continuation decision (issue #20): the script itself resumes, but the agent
+        /// chain does not. logCallback and onFinished are closures over the old process's
+        /// planner state and cannot be serialised, so a restored script logs through
+        /// SynapseLogger and finishes without a continuation — and says so, once, at restore.
+        /// Persisting the whole agent conversation was rejected: the game state the
+        /// conversation reasoned about is stale after a load, so a "resumed" agent would be
+        /// acting on a world that no longer matches its history.
+        /// </summary>
+        public static int RestoreFromSave(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return 0;
+
+            List<PersistedScript> persisted;
+            try
+            {
+                persisted = JsonConvert.DeserializeObject<List<PersistedScript>>(json);
+            }
+            catch (Exception ex)
+            {
+                SynapseLogger.Warning($"[Script Runner] Persisted scripts in the save could not be read: [{ex.GetType().Name}] {ex.Message}", "performance");
+                return 0;
+            }
+            if (persisted == null || persisted.Count == 0) return 0;
+
+            int restored = 0;
+            foreach (var p in persisted)
+            {
+                if (p?.script?.steps == null || p.script.steps.Count == 0) continue;
+
+                var active = new ActiveScript
+                {
+                    script = p.script,
+                    currentStepIndex = Math.Max(0, Math.Min(p.currentStepIndex, p.script.steps.Count - 1)),
+                    isWaiting = p.isWaiting,
+                    waitCondition = p.waitCondition,
+                    waitPawnName = p.waitPawnName,
+                    waitTimeoutTicks = Math.Max(1, p.waitRemainingTicks),
+                    waitStartTick = 0,
+                    allowMutatingTools = p.allowMutatingTools,
+                    pendingResume = true,
+                    logCallback = line => SynapseLogger.Message(line, "performance"),
+                    onFinished = null,
+                };
+                if (p.results != null)
+                {
+                    foreach (var kv in p.results) active.results[kv.Key] = kv.Value;
+                }
+
+                _activeScripts.Add(active);
+                restored++;
+                SynapseLogger.Message(
+                    $"[Script Runner] Restored script '{active.script.scriptName}' at step {active.currentStepIndex + 1}/{active.script.steps.Count} from save. Its agent chain was interrupted by the save and will not resume; further output goes to the log.",
+                    "performance");
+            }
+            return restored;
+        }
+
+        /// <summary>
+        /// Drop every active script before a game loads. The old game's scripts (and their
+        /// agent chains) belong to a world that is being replaced; onFinished is deliberately
+        /// NOT invoked — those closures reference state mid-teardown, and the planner's own
+        /// run limits bound any chain left dangling.
+        /// </summary>
+        public static void ClearForLoad()
+        {
+            if (_activeScripts.Count == 0) return;
+            SynapseLogger.Message($"[Script Runner] Discarding {_activeScripts.Count} active script(s) from the previous session.", "performance");
+            _activeScripts.Clear();
+        }
 
         public static List<string> GetActiveScriptNames()
         {
@@ -57,16 +286,48 @@ namespace RimSynapse
             return list;
         }
 
+        // Binary-compatible original signature; the gating variant is a separate overload.
         public static void StartScript(SynapseScript script, Action<string> logCallback, Action onFinished = null)
         {
+            StartScript(script, logCallback, onFinished, allowMutatingTools: true);
+        }
+
+        public static void StartScript(SynapseScript script, Action<string> logCallback, Action onFinished, bool allowMutatingTools)
+        {
             if (script == null || script.steps == null || script.steps.Count == 0) return;
-            
+
+            // Normalise legacy aliases up front (each rewrite is logged), then check the
+            // script against the declared step schema. A script that fails validation is
+            // refused with every error named — onFinished still runs, so an agent chain
+            // receives the errors through its normal feedback and can correct the shape.
+            SynapseScriptValidator.NormalizeAliases(script, logCallback);
+            var errors = SynapseScriptValidator.Validate(script, logCallback);
+            if (errors.Count > 0)
+            {
+                logCallback?.Invoke($"[Script Runner] Script '{script.scriptName}' rejected — {errors.Count} validation error(s):");
+                foreach (var error in errors)
+                {
+                    logCallback?.Invoke($"[Script Runner]   {error}");
+                }
+                SynapseLogger.Warning($"Script '{script.scriptName}' rejected: {string.Join(" | ", errors)}", "performance");
+                try
+                {
+                    onFinished?.Invoke();
+                }
+                catch (Exception ex)
+                {
+                    logCallback?.Invoke($"[Error] onFinished after rejection failed: {ex.Message}");
+                }
+                return;
+            }
+
             var active = new ActiveScript
             {
                 script = script,
                 currentStepIndex = 0,
                 logCallback = logCallback,
-                onFinished = onFinished
+                onFinished = onFinished,
+                allowMutatingTools = allowMutatingTools
             };
             
             _activeScripts.Add(active);
@@ -86,6 +347,25 @@ namespace RimSynapse
             var listCopy = _activeScripts.ToList();
             foreach (var active in listCopy)
             {
+                // First tick after a restore: re-anchor the wait against the loaded game's
+                // clock (waitTimeoutTicks already holds the remaining time), or pick the
+                // script back up if it was somehow persisted between steps.
+                if (active.pendingResume)
+                {
+                    active.pendingResume = false;
+                    if (active.isWaiting)
+                    {
+                        active.waitStartTick = currentTick;
+                        active.logCallback?.Invoke($"[Script Runner] Script '{active.script?.scriptName}' resumed: wait timeout re-anchored with {active.waitTimeoutTicks} ticks remaining.");
+                    }
+                    else
+                    {
+                        active.logCallback?.Invoke($"[Script Runner] Script '{active.script?.scriptName}' resumed at step {active.currentStepIndex + 1}.");
+                        ExecuteNextStep(active);
+                        continue;
+                    }
+                }
+
                 if (active.isWaiting)
                 {
                     bool conditionMet = false;
@@ -120,6 +400,87 @@ namespace RimSynapse
             }
         }
 
+        /// <summary>
+        /// Runs a step as a tool call.
+        ///
+        /// A step type is a tool name: anything not handled as an alias or as wait_until is
+        /// dispatched to <see cref="SynapseToolRegistry.ExecuteTool"/>. An explicit "call_tool"
+        /// step names the tool in its arguments instead, which is the only way to reach a tool
+        /// whose name collides with wait_until or one of the aliases rewritten above.
+        ///
+        /// The registry answers an unknown tool with an error payload rather than throwing, so
+        /// the name is checked first — otherwise a mistyped step logs that payload as ordinary
+        /// output and the script carries on as though it worked.
+        /// </summary>
+        private static void ExecuteToolStep(ActiveScript active, SynapseScriptStep step)
+        {
+            int stepNumber = active.currentStepIndex + 1;
+            var args = step.arguments ?? new Dictionary<string, object>();
+
+            string toolName = step.type;
+            string resultKey = null;
+
+            if (step.type.Equals("call_tool", StringComparison.OrdinalIgnoreCase))
+            {
+                toolName = args.TryGetValue("tool", out var t) ? t?.ToString() : null;
+                if (string.IsNullOrEmpty(toolName))
+                {
+                    active.logCallback?.Invoke($"[Error] Step {stepNumber}: call_tool needs a 'tool' argument naming the tool to run.");
+                    return;
+                }
+
+                // Nested arguments belong to the tool; anything else here is step metadata.
+                if (args.TryGetValue("arguments", out var inner) && inner != null)
+                {
+                    try { args = JsonConvert.DeserializeObject<Dictionary<string, object>>(JsonConvert.SerializeObject(inner)) ?? new Dictionary<string, object>(); }
+                    catch { args = new Dictionary<string, object>(); }
+                }
+                else
+                {
+                    args = new Dictionary<string, object>();
+                }
+            }
+
+            if (step.arguments != null && step.arguments.TryGetValue("resultKey", out var rk))
+            {
+                resultKey = rk?.ToString();
+                args.Remove("resultKey");
+            }
+
+            if (!SynapseToolRegistry.IsToolRegistered(toolName))
+            {
+                active.logCallback?.Invoke($"[Error] Step {stepNumber}: unknown tool '{toolName}'. Skipping.");
+                return;
+            }
+
+            active.logCallback?.Invoke($"[Script Runner] Executing step {stepNumber}: {toolName}");
+            try
+            {
+                string result = SynapseToolRegistry.ExecuteTool(toolName, JsonConvert.SerializeObject(args), active.allowMutatingTools);
+
+                // Handlers report their own failures in the payload, so a returned error is not
+                // an ordinary result and should not read like one.
+                if (!string.IsNullOrEmpty(result) && result.IndexOf("\"error\"", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    active.logCallback?.Invoke($"[Error] Step {stepNumber} ({toolName}) reported: {result}");
+                }
+                else
+                {
+                    active.logCallback?.Invoke($"[Result] {result}");
+                }
+
+                if (!string.IsNullOrEmpty(resultKey))
+                {
+                    active.results[resultKey] = result;
+                    active.logCallback?.Invoke($"[Script Runner] Stored result as '{resultKey}'.");
+                }
+            }
+            catch (Exception ex)
+            {
+                active.logCallback?.Invoke($"[Error] Step {stepNumber} ({toolName}) threw: {ex.Message}");
+            }
+        }
+
         private static void ExecuteNextStep(ActiveScript active)
         {
             while (active.currentStepIndex < active.script.steps.Count && !active.isWaiting)
@@ -131,32 +492,7 @@ namespace RimSynapse
                     continue;
                 }
 
-                // Alias Normalization
-                if (step.type.Equals("equip_item", StringComparison.OrdinalIgnoreCase) || 
-                    step.type.Equals("equip_weapon", StringComparison.OrdinalIgnoreCase) ||
-                    step.type.Equals("equip", StringComparison.OrdinalIgnoreCase))
-                {
-                    step.type = "possess_colonist";
-                    if (step.arguments == null) step.arguments = new Dictionary<string, object>();
-                    step.arguments["action"] = "equip";
-                    if (step.arguments.TryGetValue("weaponName", out var wn)) step.arguments["targetItemName"] = wn;
-                    if (step.arguments.TryGetValue("itemName", out var itn)) step.arguments["targetItemName"] = itn;
-                    if (step.arguments.TryGetValue("weaponDef", out var wd)) step.arguments["targetItemDef"] = wd;
-                    if (step.arguments.TryGetValue("itemDef", out var itd)) step.arguments["targetItemDef"] = itd;
-                    if (!step.arguments.ContainsKey("commandName")) step.arguments["commandName"] = "Equipping Weapon";
-                }
-                else if (step.type.Equals("damage_self", StringComparison.OrdinalIgnoreCase))
-                {
-                    step.type = "damage_self_with_equipped";
-                }
-                else if (step.type.Equals("clear_queue", StringComparison.OrdinalIgnoreCase) || 
-                         step.type.Equals("stop_movement", StringComparison.OrdinalIgnoreCase))
-                {
-                    step.type = "possess_colonist";
-                    if (step.arguments == null) step.arguments = new Dictionary<string, object>();
-                    step.arguments["action"] = "clear";
-                    if (!step.arguments.ContainsKey("commandName")) step.arguments["commandName"] = "Stopping Command";
-                }
+                // Aliases were normalised (and logged) by the validator at StartScript.
 
                 if (step.type.Equals("wait_until", StringComparison.OrdinalIgnoreCase))
                 {
@@ -177,23 +513,24 @@ namespace RimSynapse
                 }
                 else
                 {
-                    active.logCallback?.Invoke($"[Script Runner] Executing step {active.currentStepIndex + 1}: {step.type}");
-                    try
-                    {
-                        string argsJson = JsonConvert.SerializeObject(step.arguments);
-                        string result = SynapseToolRegistry.ExecuteTool(step.type, argsJson);
-                        active.logCallback?.Invoke($"[Result] {result}");
-                    }
-                    catch (Exception ex)
-                    {
-                        active.logCallback?.Invoke($"[Error] Execution failed: {ex.Message}");
-                    }
+                    ExecuteToolStep(active, step);
                     active.currentStepIndex++;
                 }
             }
 
             if (active.currentStepIndex >= active.script.steps.Count)
             {
+                // Emit stored results before the finish line. SynapseActionExecutor hands the
+                // whole log back to the agent, so anything a step kept has to appear here to be
+                // visible on the next turn.
+                if (active.results.Count > 0)
+                {
+                    foreach (var kv in active.results)
+                    {
+                        active.logCallback?.Invoke($"[Script Runner] {kv.Key} = {kv.Value}");
+                    }
+                }
+
                 active.logCallback?.Invoke($"[Script Runner] Script '{active.script.scriptName}' finished.");
                 _toRemove.Add(active);
                 try

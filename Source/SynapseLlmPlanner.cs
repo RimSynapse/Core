@@ -9,19 +9,63 @@ namespace RimSynapse
     /// </summary>
     public class SynapseLlmPlanner
     {
-        private const int MaxTurns = 5;
         private readonly string _command;
         private readonly Action<string> _logCallback;
         private readonly Action<bool, string> _onComplete;
         private readonly List<ChatMessage> _messages;
         private int _turnsCount = 0;
+        private int _requestsIssued = 0;
+        private volatile bool _cancelled;
 
+        /// <summary>
+        /// True for runs the player did not directly initiate (escalations, pre-seeded
+        /// evaluations). Autonomous runs may be barred from mutating tools via settings.
+        /// </summary>
+        public bool IsAutonomous { get; }
+
+        /// <summary>Turn ceiling, from settings. The old hardcoded limit was 5.</summary>
+        private static int MaxTurns => Math.Max(1, RimSynapseMod.Instance?.Settings?.agentMaxTurns ?? 8);
+
+        /// <summary>LLM-request ceiling per run. Turns and requests are currently 1:1, but
+        /// the budget is tracked separately so multi-request turns stay bounded too.</summary>
+        private static int MaxRequests => Math.Max(1, RimSynapseMod.Instance?.Settings?.agentMaxRequestsPerRun ?? 12);
+
+        /// <summary>Identifies this run in <see cref="SynapseAgentRunLog"/>, the inspector's backing model.</summary>
+        public int RunId { get; }
+
+        // Binary-compatible original signature. Kept as a distinct overload rather than an
+        // optional parameter: appending one would delete this signature from the assembly
+        // and break any mod compiled against an earlier Core.
         public SynapseLlmPlanner(string command, Action<string> logCallback, Action<bool, string> onComplete)
+            : this(command, logCallback, onComplete, false)
+        {
+        }
+
+        public SynapseLlmPlanner(string command, Action<string> logCallback, Action<bool, string> onComplete, bool isAutonomous)
         {
             _command = command;
             _logCallback = logCallback;
-            _onComplete = onComplete;
             _messages = new List<ChatMessage>();
+            IsAutonomous = isAutonomous;
+
+            // Every completion path funnels through _onComplete, so wrapping it here is the
+            // one place the run log reliably learns a run's terminal state.
+            RunId = SynapseAgentRunLog.BeginRun(command, isAutonomous, this);
+            _onComplete = (ok, msg) =>
+            {
+                SynapseAgentRunLog.EndRun(RunId, ok, msg);
+                onComplete?.Invoke(ok, msg);
+            };
+        }
+
+        /// <summary>
+        /// Stop the run: the next loop entry reports cancellation instead of calling the
+        /// LLM. A script in flight finishes its current step; aborting it via
+        /// SynapseScriptRunner.AbortScript routes back here through onFinished.
+        /// </summary>
+        public void Cancel()
+        {
+            _cancelled = true;
         }
 
         public void Start()
@@ -98,110 +142,138 @@ namespace RimSynapse
             sb.AppendLine("  ]");
             sb.AppendLine("}");
             sb.AppendLine();
+            sb.AppendLine(SynapseScriptRunner.DescribeStepSchema());
             sb.AppendLine("IMPORTANT: If you have finished all actions or if there is nothing left to do, output a friendly natural language summary of your actions without any JSON block.");
             sb.AppendLine();
-            sb.AppendLine("Available Tools (output them inside your JSON calls or steps):");
+            sb.Append(BuildToolSection(_command));
 
-            // Compile the list of tools to send using relevance-based RAG matching
-            var coreTools = new List<string> { 
-                "search_map_entities", 
-                "search_game_definitions", 
-                "possess_colonist", 
-                "damage_self_with_equipped", 
-                "list_available_tools"
-            };
+            string systemPrompt = sb.ToString();
 
-            bool enableCheating = RimSynapseMod.Instance?.Settings?.enableCheatingActions ?? false;
-            if (enableCheating)
+            _messages.Add(ChatMessage.System(systemPrompt));
+
+            // Turns are the latency: on slow hardware each plan-observe cycle is a full
+            // LLM round trip, so inlining the obviously-relevant read-only results lets
+            // simple requests finish in one turn instead of two.
+            string preSeed = BuildPreSeedSection(_command, out _);
+            string userContent = $"User Instruction: {_command}";
+            if (!string.IsNullOrEmpty(preSeed))
             {
-                coreTools.Add("modify_pawn_state");
+                userContent += "\n\n" + preSeed;
             }
+            _messages.Add(ChatMessage.User(userContent));
 
-            var nonCoreScoredTools = new List<KeyValuePair<double, GameTool>>();
+            var options = new ChatOptions { priority = 10, requestName = "API Command Resolver" };
+            RunAgentLoop(options);
+        }
 
-            foreach (var tool in SynapseToolRegistry.AllTools)
+        /// <summary>
+        /// Relevance a match must clear before it is pre-executed: keyword-grade (12)
+        /// and above. Description-level matches never justify speculative execution.
+        /// </summary>
+        public const double PreSeedScoreThreshold = 12.0;
+
+        /// <summary>
+        /// Run the obviously-relevant read-only tools before the first LLM call and
+        /// inline their results, labelled as pre-fetched.
+        ///
+        /// Safety: the mutating manifest is not yet a complete audit of every tool, so
+        /// the primary filter is a conservative name-prefix allowlist (get_/search_/list_);
+        /// the isMutating flag and executing with allowMutating: false are defence in
+        /// depth. A vague command that clears no threshold pre-seeds nothing — guessing
+        /// wrong spends budget and misleads the model, which is worse than a second turn.
+        /// The amount scales with the capability tier.
+        /// </summary>
+        public static string BuildPreSeedSection(string command, out List<string> preSeeded)
+        {
+            preSeeded = new List<string>();
+
+            var tier = SynapseTierController.Current;
+            int maxTools = tier == SynapseCapabilityTier.Rich ? 3
+                         : tier == SynapseCapabilityTier.Standard ? 2 : 1;
+            int excerptChars = tier == SynapseCapabilityTier.Rich ? 900
+                             : tier == SynapseCapabilityTier.Standard ? 600 : 300;
+
+            var sb = new System.Text.StringBuilder();
+            foreach (var match in SynapseToolIndex.Search(command, 10))
             {
-                if (tool.name == "execute_game_tool")
-                    continue;
+                if (preSeeded.Count >= maxTools) break;
+                if (match.Score < PreSeedScoreThreshold) continue;
 
-                // Hide debug/cheating tools if disabled
-                if (tool.isDebugAction && !enableCheating)
-                    continue;
+                var tool = match.Tool;
+                if (tool.isMutating || tool.isDebugAction) continue;
+                if (!(tool.name.StartsWith("get_", StringComparison.Ordinal)
+                      || tool.name.StartsWith("search_", StringComparison.Ordinal)
+                      || tool.name.StartsWith("list_", StringComparison.Ordinal))) continue;
 
-                if (coreTools.Contains(tool.name))
-                    continue;
-
-                // Build a quick string representation of parameters for RAG indexing
-                var paramsSb = new System.Text.StringBuilder();
+                string result;
                 try
                 {
-                    var parametersJObj = Newtonsoft.Json.Linq.JObject.FromObject(tool.parameters);
-                    if (parametersJObj != null && parametersJObj.TryGetValue("properties", out var propsToken) && propsToken is Newtonsoft.Json.Linq.JObject propsObj)
-                    {
-                        foreach (var prop in propsObj)
-                        {
-                            paramsSb.Append(" ").Append(prop.Key);
-                            if (prop.Value is Newtonsoft.Json.Linq.JObject pDetail && pDetail.TryGetValue("description", out var dToken))
-                            {
-                                paramsSb.Append(" ").Append(dToken.ToString());
-                            }
-                        }
-                    }
+                    result = SynapseToolRegistry.ExecuteTool(tool.name, "{}", allowMutating: false);
                 }
-                catch {}
-
-                double score = CalculateToolScore(_command, tool, paramsSb.ToString());
-                if (score > 0)
+                catch
                 {
-                    nonCoreScoredTools.Add(new KeyValuePair<double, GameTool>(score, tool));
+                    continue;
                 }
+
+                // A failed speculation is not worth prompt space.
+                if (string.IsNullOrEmpty(result)
+                    || result.IndexOf("\"error\"", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+
+                sb.AppendLine($"### {tool.name}");
+                sb.AppendLine(SynapseResultStore.AbbreviateIfLarge(result, excerptChars));
+                preSeeded.Add(tool.name);
+                SynapseLogger.Message($"[Agent] Pre-seeded {tool.name} (score {match.Score:F0}, tier {tier}).", "performance");
             }
 
-            // Sort non-core tools descending by relevance score
-            nonCoreScoredTools.Sort((a, b) => b.Key.CompareTo(a.Key));
+            if (preSeeded.Count == 0) return string.Empty;
 
-            // Select only the tools to describe (6 Core + up to 6 top scoring Non-Core tools, or all non-core tools if matched count is 5 or less)
+            return "Pre-fetched observations (read-only, gathered automatically before your first turn — verify with tools if critical):\n" + sb;
+        }
+
+        /// <summary>
+        /// The bounded tool section of the system prompt: a fixed core set plus the
+        /// index's best matches for the command — never the whole registry.
+        ///
+        /// The old selection fell back to describing every registered tool whenever fewer
+        /// than six non-core tools matched, so a vague command produced the *largest*
+        /// prompt. Now a vague command produces the smallest, and the model is told how to
+        /// search for anything not listed.
+        /// </summary>
+        public static string BuildToolSection(string command)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("Available Tools (output them inside your JSON calls or steps):");
+
+            bool enableCheating = RimSynapseMod.Instance?.Settings?.enableCheatingActions ?? false;
+
+            var coreTools = new List<string> {
+                "search_map_entities",
+                "search_game_definitions",
+                "possess_colonist",
+                "damage_self_with_equipped",
+                "list_available_tools"
+            };
+            if (enableCheating) coreTools.Add("modify_pawn_state");
+
             var finalToolsList = new List<GameTool>();
-            
-            // Add core tools first
             foreach (var tool in SynapseToolRegistry.AllTools)
             {
-                if (coreTools.Contains(tool.name))
-                {
-                    // Double check debug action criteria
-                    if (tool.isDebugAction && !enableCheating)
-                        continue;
-
-                    finalToolsList.Add(tool);
-                }
+                if (!coreTools.Contains(tool.name)) continue;
+                if (tool.isDebugAction && !enableCheating) continue;
+                finalToolsList.Add(tool);
             }
 
-            // Append top non-core tools or fallback to all non-core tools
-            if (nonCoreScoredTools.Count <= 5)
+            int added = 0;
+            foreach (var match in SynapseToolIndex.Search(command, 12, includeDebug: enableCheating))
             {
-                foreach (var tool in SynapseToolRegistry.AllTools)
-                {
-                    if (tool.name != "execute_game_tool" && !coreTools.Contains(tool.name))
-                    {
-                        if (tool.isDebugAction && !enableCheating)
-                            continue;
-
-                        if (!finalToolsList.Contains(tool))
-                        {
-                            finalToolsList.Add(tool);
-                        }
-                    }
-                }
-            }
-            else
-            {
-                for (int i = 0; i < Math.Min(6, nonCoreScoredTools.Count); i++)
-                {
-                    finalToolsList.Add(nonCoreScoredTools[i].Value);
-                }
+                if (added >= 6) break;
+                var tool = match.Tool;
+                if (tool.name == "execute_game_tool" || coreTools.Contains(tool.name)) continue;
+                if (finalToolsList.Contains(tool)) continue;
+                finalToolsList.Add(tool);
+                added++;
             }
 
-            // Format the list for the system prompt
             foreach (var tool in finalToolsList)
             {
                 sb.AppendLine($"- **{tool.name}**: {tool.description}");
@@ -226,124 +298,53 @@ namespace RimSynapse
                 }
                 catch (Exception)
                 {
-                    // Fallback to name if serialization fails
+                    // Tool stays listed by name and description if its schema fails to serialise.
                 }
             }
 
-            string systemPrompt = sb.ToString();
-
-            _messages.Add(ChatMessage.System(systemPrompt));
-            _messages.Add(ChatMessage.User($"User Instruction: {_command}"));
-
-            var options = new ChatOptions { priority = 10, requestName = "API Command Resolver" };
-            RunAgentLoop(options);
-        }
-
-        private double CalculateToolScore(string command, GameTool tool, string paramsText)
-        {
-            double score = 0;
-            string cmdLower = command.ToLower();
-            string toolName = tool.name;
-            string nameLower = toolName.ToLower();
-            string descLower = tool.description.ToLower();
-            string paramsLower = paramsText.ToLower();
-
-            char[] splitChars = new char[] { ' ', ',', '.', '!', '?', ';', ':', '-', '_', '(', ')' };
-            string[] words = cmdLower.Split(splitChars, StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (var word in words)
-            {
-                if (word.Length <= 2 || word == "the" || word == "and" || word == "for" || word == "with" || word == "give" || word == "make" || word == "have")
-                    continue;
-
-                // Exact word match in tool name gets high priority
-                if (nameLower == word) score += 15.0;
-                else if (nameLower.Contains(word)) score += 5.0;
-
-                // Match in description
-                if (descLower.Contains(word)) score += 3.0;
-
-                // Match in parameter lists
-                if (paramsLower.Contains(word)) score += 2.0;
-            }
-
-            // Apply Dynamic Extensible Keywords Boost:
-            if (tool.keywords != null)
-            {
-                foreach (var kw in tool.keywords)
-                {
-                    if (cmdLower.Contains(kw.ToLower()))
-                    {
-                        score += 12.0;
-                    }
-                }
-            }
-
-            // Apply Semantic Association Boost Rules:
-            
-            // 1. Possessive / Pawn Pronouns -> Boost Pawn modification and possession tools
-            if (cmdLower.Contains("his") || cmdLower.Contains("her") || cmdLower.Contains("their") || 
-                cmdLower.Contains("him") || cmdLower.Contains("them") || cmdLower.Contains("she") || 
-                cmdLower.Contains("he") || cmdLower.Contains("self") || cmdLower.Contains("own") ||
-                cmdLower.Contains("pawn") || cmdLower.Contains("colonist") || cmdLower.Contains("animal"))
-            {
-                if (toolName == "modify_pawn_state" || toolName == "possess_colonist" || toolName == "damage_self_with_equipped")
-                    score += 10.0;
-            }
-
-            // 2. Action / Job Verbs -> Boost possession tools
-            if (cmdLower.Contains("equip") || cmdLower.Contains("prioritize") || cmdLower.Contains("walk") || 
-                cmdLower.Contains("go") || cmdLower.Contains("move") || cmdLower.Contains("build") || 
-                cmdLower.Contains("mine") || cmdLower.Contains("harvest") || cmdLower.Contains("clean") || 
-                cmdLower.Contains("haul") || cmdLower.Contains("repair") || cmdLower.Contains("work") || 
-                cmdLower.Contains("job") || cmdLower.Contains("construct"))
-            {
-                if (toolName == "possess_colonist")
-                    score += 10.0;
-            }
-
-            // 3. Combat / Harm words -> Boost combat self-harm and damage tools
-            if (cmdLower.Contains("kill") || cmdLower.Contains("damage") || cmdLower.Contains("hurt") || 
-                cmdLower.Contains("die") || cmdLower.Contains("suicide") || cmdLower.Contains("stab") || 
-                cmdLower.Contains("shoot") || cmdLower.Contains("fire") || cmdLower.Contains("attack") || 
-                cmdLower.Contains("wound") || cmdLower.Contains("bleed"))
-            {
-                if (toolName == "modify_pawn_state" || toolName == "damage_self_with_equipped")
-                    score += 12.0;
-            }
-
-            // 4. Incident / Threat words -> Boost incident and spawner tools
-            if (cmdLower.Contains("raid") || cmdLower.Contains("mechanoid") || cmdLower.Contains("threat") || 
-                cmdLower.Contains("infestation") || cmdLower.Contains("spawn") || cmdLower.Contains("incident") ||
-                cmdLower.Contains("event"))
-            {
-                if (toolName == "spawn_incident" || toolName == "trigger_raid" || toolName == "spawn_threat")
-                    score += 15.0;
-            }
-
-            // 5. Environment words -> Boost weather and time tools
-            if (cmdLower.Contains("weather") || cmdLower.Contains("time") || cmdLower.Contains("rain") || 
-                cmdLower.Contains("storm") || cmdLower.Contains("sun") || cmdLower.Contains("day") || 
-                cmdLower.Contains("night") || cmdLower.Contains("snow") || cmdLower.Contains("fog"))
-            {
-                if (toolName == "set_weather" || toolName == "set_time")
-                    score += 15.0;
-            }
-
-            return score;
+            sb.AppendLine();
+            sb.AppendLine("These are only the most relevant tools — more exist. Call list_available_tools with a 'query' to search the full directory, describe_tool with a 'name' for a tool's full schema, and execute_game_tool to run any tool by name.");
+            return sb.ToString();
         }
 
         public void RunAgentLoop(ChatOptions options)
         {
-            _turnsCount++;
-            if (_turnsCount > MaxTurns)
+            if (_cancelled)
             {
-                _logCallback?.Invoke("[Warning] Maximum execution turns reached. Terminating loop.");
-                _onComplete?.Invoke(false, "Max turns reached without final summary.");
+                _logCallback?.Invoke($"[Agent] Run cancelled after {_turnsCount} turn(s).");
+                SynapseLogger.Message($"[Agent] Run cancelled after {_turnsCount} turn(s).", "performance");
+                _onComplete?.Invoke(false, "Run cancelled.");
                 return;
             }
 
+            _turnsCount++;
+            if (_turnsCount > MaxTurns)
+            {
+                _logCallback?.Invoke($"[Agent] Stopped: turn limit reached ({_turnsCount - 1}/{MaxTurns}).");
+                SynapseLogger.Message($"[Agent] Stopped: turn limit reached ({_turnsCount - 1}/{MaxTurns}).", "performance");
+                _onComplete?.Invoke(false, $"Turn limit reached ({MaxTurns}) without a final summary.");
+                return;
+            }
+
+            if (_requestsIssued >= MaxRequests)
+            {
+                _logCallback?.Invoke($"[Agent] Stopped: request budget exhausted ({_requestsIssued}/{MaxRequests}).");
+                SynapseLogger.Message($"[Agent] Stopped: request budget exhausted ({_requestsIssued}/{MaxRequests}).", "performance");
+                _onComplete?.Invoke(false, $"Request budget exhausted ({MaxRequests}).");
+                return;
+            }
+            _requestsIssued++;
+            SynapseAgentRunLog.RecordTurnStart(RunId, _turnsCount, MaxTurns, _requestsIssued, MaxRequests);
+
             _logCallback?.Invoke($"[API Agent] Invoking LLM (Turn {_turnsCount})...");
+
+            // Keep the history inside the class operating point. Agent traffic records under
+            // the "custom" class, so its budget is measurement-driven like everything else.
+            var op = SynapseTierController.GetOperatingPoint("custom");
+            int estimate = SynapseAgentHistory.CompactToBudget(_messages, op.MaxPromptTokens, _logCallback);
+            SynapseLogger.Message(
+                $"[Agent] Turn {_turnsCount}: prompt ~{estimate} tokens (cap {op.MaxPromptTokens}, governed by {op.GovernedBy}).",
+                "performance");
 
             var request = new LlmTextRequest
             {

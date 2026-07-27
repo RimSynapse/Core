@@ -47,6 +47,31 @@ namespace RimSynapse.Internal
                     break;
             }
 
+            // Foreground always wins: never dispatch on the heels of a live request,
+            // whatever the throttle mode says.
+            if (DateTime.UtcNow - RequestQueue.LastForegroundEnqueueUtc < TimeSpan.FromSeconds(3))
+            {
+                return;
+            }
+
+            // Forecast-aware dispatch: during in-game hours the demand history says are
+            // quiet (colonists asleep, little social traffic), fill the window
+            // aggressively regardless of the configured mode — this is when background
+            // batches like nightly reviews are meant to run.
+            try
+            {
+                if (Current.ProgramState == ProgramState.Playing && Find.TickManager != null)
+                {
+                    int abs = Find.TickManager.TicksAbs;
+                    if (SynapseDemandForecast.IsLikelyQuiet(abs / 60000, abs / 2500 % 24))
+                    {
+                        idleDelay = TimeSpan.FromMilliseconds(500);
+                        burstSize = Math.Max(burstSize, settings?.opportunisticBurstSize ?? 3);
+                    }
+                }
+            }
+            catch { }
+
             if (DateTime.UtcNow - _lastIdleCheck < idleDelay)
             {
                 return;
@@ -76,7 +101,17 @@ namespace RimSynapse.Internal
                 while (tasksFired < burstSize && eligible.Count > 0)
                 {
                     var selected = SelectByWeightedRandom(eligible);
-                    FireTask(selected, currentTick, cooldownMultiplier, mode);
+                    // Ambient marker so requests the task enqueues are classified as
+                    // background and excluded from the demand forecast.
+                    IsFiringTask = true;
+                    try
+                    {
+                        FireTask(selected, currentTick, cooldownMultiplier, mode);
+                    }
+                    finally
+                    {
+                        IsFiringTask = false;
+                    }
                     eligible.Remove(selected);
                     tasksFired++;
                 }

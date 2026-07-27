@@ -57,6 +57,14 @@ namespace RimSynapse.Internal
     public static partial class OpportunisticTaskManager
     {
         /// <summary>
+        /// True while a task's callback is being fired. Requests enqueued during a fire
+        /// are classified as background and excluded from the demand forecast — they only
+        /// run when the queue is already idle, so counting them would make quiet hours
+        /// look busy.
+        /// </summary>
+        internal static bool IsFiringTask;
+
+        /// <summary>
         /// Runtime state for a registered opportunistic task.
         /// Exposed publicly so the Queue Monitor can display it.
         /// </summary>

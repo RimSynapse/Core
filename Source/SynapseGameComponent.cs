@@ -28,8 +28,34 @@ namespace RimSynapse
         /// <summary>Interval between opportunistic task checks during pause (seconds).</summary>
         private const float PauseCheckInterval = 2.0f;
         private static int _fileCheckCooldown = 0;
+        private static int _tierCheckCooldown = 0;
 
         public SynapseGameComponent(Game game) { }
+
+        /// <summary>
+        /// Scripts mid-run travel with the save as one JSON string (issue #20). Saves from
+        /// before this feature have no entry, so the string loads as null and restore is a
+        /// no-op; loading always discards whatever scripts the previous session left running
+        /// before restoring the save's own.
+        /// </summary>
+        public override void ExposeData()
+        {
+            base.ExposeData();
+
+            string persistedScripts = null;
+            if (Scribe.mode == LoadSaveMode.Saving)
+            {
+                persistedScripts = SynapseScriptRunner.SnapshotForSave();
+            }
+
+            Scribe_Values.Look(ref persistedScripts, "synapseActiveScripts");
+
+            if (Scribe.mode == LoadSaveMode.LoadingVars)
+            {
+                SynapseScriptRunner.ClearForLoad();
+                SynapseScriptRunner.RestoreFromSave(persistedScripts);
+            }
+        }
 
         /// <summary>
         /// Enqueue an action to run on the main thread during the next frame.
@@ -89,6 +115,15 @@ namespace RimSynapse
             {
                 _fileCheckCooldown = 0;
                 PollScriptInputFile();
+            }
+
+            // Re-evaluate the capability tier every ~5 seconds: detects model swaps,
+            // promotes on sustained fast responses, demotes immediately on slow ones.
+            _tierCheckCooldown++;
+            if (_tierCheckCooldown >= 300)
+            {
+                _tierCheckCooldown = 0;
+                SynapseTierController.Update();
             }
 
             // ── Pause-time opportunistic task handling ──

@@ -352,7 +352,30 @@ namespace RimSynapse.Internal
                 if (_recentDurations.Count > 20)
                     _recentDurations.RemoveAt(0);
             }
-            
+
+            // Retain per-class samples for the tier controller. Provider-reported prompt
+            // tokens when available, a chars/4 estimate of the payload otherwise.
+            if (success && resultObj is ChatResult tierRes)
+            {
+                int promptTokens = tierRes.promptTokens;
+                if (promptTokens <= 0 && req.Payload is LlmTextRequest tierReq)
+                {
+                    int chars = tierReq.SystemPrompt?.Length ?? 0;
+                    if (tierReq.Messages != null)
+                    {
+                        foreach (var m in tierReq.Messages) chars += m?.content?.Length ?? 0;
+                    }
+                    promptTokens = chars / 4;
+                }
+
+                SynapsePerformanceModel.Record(req.Options?.eventType, durationMs, promptTokens);
+
+                if (SynapseTierController.IsBackendMetered())
+                {
+                    SynapsePerformanceModel.RecordTokensSpent(promptTokens + tierRes.completionTokens);
+                }
+            }
+
             if (success && resultObj is ChatResult chatRes && chatRes.completionTokens > 0)
             {
                 lock (_topsLock)

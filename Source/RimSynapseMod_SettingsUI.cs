@@ -68,6 +68,73 @@ namespace RimSynapse
                     tooltip: "Manually specify your local LLM's context length (e.g. 32768, 16384, or 8192) if it cannot be dynamically detected from the provider API. Controls prompt size limits and paginators.");
             }
             
+            listing.Gap(4f);
+            string tierModeLabel;
+            switch (Settings.agentTierMode)
+            {
+                case 1: tierModeLabel = "Minimal"; break;
+                case 2: tierModeLabel = "Standard"; break;
+                case 3: tierModeLabel = "Rich"; break;
+                default: tierModeLabel = "Auto"; break;
+            }
+            if (listing.ButtonTextLabeled(
+                $"Capability tier (effective: {SynapseTierController.Current})",
+                tierModeLabel))
+            {
+                Settings.agentTierMode = (Settings.agentTierMode + 1) % 4;
+            }
+            listing.Label("  Auto starts at Minimal and promotes from measured response latency. " +
+                "Minimal fits ~2K context models; Rich spends more context on strong hardware.");
+
+            listing.Gap(4f);
+            listing.CheckboxLabeled("Ignore token costs (EXPERIMENTAL)",
+                ref Settings.ignoreTokenCosts,
+                "Treats metered cloud backends (OpenAI, Anthropic, Gemini, Pollinations) as unmetered: " +
+                "context scales up within the latency headroom and the token caps below are bypassed. " +
+                "This can significantly increase API spend. Logged when active.");
+
+            if (SynapseTierController.IsBackendMetered() && !Settings.ignoreTokenCosts)
+            {
+                listing.Gap(2f);
+                Settings.tokenCapPerRequest = (int)listing.SliderLabeled(
+                    $"  Token cap per request: {Settings.tokenCapPerRequest}",
+                    Settings.tokenCapPerRequest, 512f, 32768f,
+                    tooltip: "Maximum prompt tokens a single request may spend on this metered backend.");
+                Settings.tokenCapPerDay = (int)listing.SliderLabeled(
+                    $"  Token cap per day: {Settings.tokenCapPerDay} (spent today: {SynapsePerformanceModel.TokensSpentToday})",
+                    Settings.tokenCapPerDay, 10000f, 2000000f,
+                    tooltip: "Total tokens per real day on this metered backend. Resets at UTC midnight; not persisted across restarts.");
+            }
+
+            listing.Gap(4f);
+            Settings.agentMaxTurns = (int)listing.SliderLabeled(
+                $"Agent turn limit: {Settings.agentMaxTurns}",
+                Settings.agentMaxTurns, 1f, 20f,
+                tooltip: "Maximum plan-execute-observe turns per agent run. Each turn is a full LLM round trip.");
+            Settings.agentMaxRequestsPerRun = (int)listing.SliderLabeled(
+                $"Agent request budget per run: {Settings.agentMaxRequestsPerRun}",
+                Settings.agentMaxRequestsPerRun, 1f, 50f,
+                tooltip: "Maximum LLM requests one agent run may issue, independent of turns.");
+            listing.CheckboxLabeled("Allow autonomous runs to change game state",
+                ref Settings.allowAutonomousMutations,
+                "Autonomous agent runs (not started by you directly) are refused state-mutating tools unless this is on. Direct Action Console commands are always allowed.");
+
+            listing.CheckboxLabeled("Enable escalation to the agent (EXPERIMENTAL)",
+                ref Settings.enableEscalation,
+                "When a programmed system hits an outcome it was not built for (e.g. a ceremony record the model failed to write), it may hand the situation to the agent instead of dropping it. Rate-limited and tier-gated; escalated runs cannot change game state unless the setting above is also on.");
+
+            if (Settings.enableEscalation)
+            {
+                Settings.escalationCooldownSeconds = (int)listing.SliderLabeled(
+                    $"  Escalation cooldown: {Settings.escalationCooldownSeconds}s",
+                    Settings.escalationCooldownSeconds, 10f, 600f,
+                    tooltip: "Minimum seconds between escalated runs, so a broken backend cannot convert every failing hook into an agent run.");
+                Settings.escalationSessionCap = (int)listing.SliderLabeled(
+                    $"  Escalations per session: {Settings.escalationSessionCap}",
+                    Settings.escalationSessionCap, 1f, 50f,
+                    tooltip: "Hard cap on escalated runs per game session.");
+            }
+
             listing.CheckboxLabeled("Enable storyteller tool usage",
                 ref Settings.enableStorytellerTools,
                 "When enabled, allows the AI storyteller to invoke tools to query precise game data. " +

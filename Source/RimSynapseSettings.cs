@@ -166,10 +166,56 @@ namespace RimSynapse
         public bool qmShowProvider = true;
         public bool qmShowModel = true;
 
+        // --- Capability tier and cost governance ---
+
+        /// <summary>Tier selection: 0 = Auto (measured), 1 = Minimal, 2 = Standard, 3 = Rich.</summary>
+        public int agentTierMode = 0;
+
+        /// <summary>
+        /// EXPERIMENTAL: treat metered (cloud) backends as unmetered — scale context up
+        /// within the latency headroom and bypass the token caps. Can increase API spend.
+        /// </summary>
+        public bool ignoreTokenCosts = false;
+
+        /// <summary>Max prompt tokens per request on a metered backend.</summary>
+        public int tokenCapPerRequest = 4000;
+
+        /// <summary>Max total tokens per (real) day on a metered backend. Not persisted across restarts.</summary>
+        public int tokenCapPerDay = 200000;
+
+        /// <summary>Max plan-execute-observe turns per agent run. The old hardcoded limit was 5.</summary>
+        public int agentMaxTurns = 8;
+
+        /// <summary>Max LLM requests per agent run, independent of turns.</summary>
+        public int agentMaxRequestsPerRun = 12;
+
+        /// <summary>Whether autonomous agent runs (escalations, pre-seeding) may call state-mutating tools.</summary>
+        public bool allowAutonomousMutations = false;
+
+        /// <summary>Whether programmed paths may escalate unexpected outcomes to the agent. Default off.</summary>
+        public bool enableEscalation = false;
+
+        /// <summary>Minimum seconds between escalated runs.</summary>
+        public int escalationCooldownSeconds = 120;
+
+        /// <summary>Maximum escalated runs per game session.</summary>
+        public int escalationSessionCap = 10;
+
         public override void ExposeData()
         {
             base.ExposeData();
             Scribe_Values.Look(ref apiProvider, "apiProvider", ApiProvider.Local_LMStudio);
+
+            Scribe_Values.Look(ref agentTierMode, "agentTierMode", 0);
+            Scribe_Values.Look(ref ignoreTokenCosts, "ignoreTokenCosts", false);
+            Scribe_Values.Look(ref tokenCapPerRequest, "tokenCapPerRequest", 4000);
+            Scribe_Values.Look(ref tokenCapPerDay, "tokenCapPerDay", 200000);
+            Scribe_Values.Look(ref agentMaxTurns, "agentMaxTurns", 8);
+            Scribe_Values.Look(ref agentMaxRequestsPerRun, "agentMaxRequestsPerRun", 12);
+            Scribe_Values.Look(ref allowAutonomousMutations, "allowAutonomousMutations", false);
+            Scribe_Values.Look(ref enableEscalation, "enableEscalation", false);
+            Scribe_Values.Look(ref escalationCooldownSeconds, "escalationCooldownSeconds", 120);
+            Scribe_Values.Look(ref escalationSessionCap, "escalationSessionCap", 10);
             
             Scribe_Values.Look(ref lmStudioUrl, "lmStudioUrl", "http://127.0.0.1:1234");
             Scribe_Values.Look(ref lmStudioApiKey, "lmStudioApiKey", "");
