@@ -4,6 +4,44 @@ Core is the API surface for an ecosystem: every companion mod's DLL binds agains
 `RimSynapseCore.dll`. Rules here exist because violating them has already broken
 things once.
 
+## GitHub first: if it is not in git, it does not exist
+
+**Every discovered item and every work action is captured in GitHub before the turn
+ends.** A chat transcript is not a record: the maintainer cannot review it, a future
+session cannot see it, and two people working from it are working from different
+source material. GitHub issues are the human-readable shared state — the repo is the
+system of record for *work*, exactly as it is for code.
+
+This is a **capture-first** discipline, not a bookkeeping step at the end:
+
+1. **A discovery becomes an issue the moment it is found.** Anything surfaced while
+   doing something else — a latent bug, a stale artifact, a missing guard, a process
+   gap, an assumption that turned out wrong — gets an issue immediately. If it is
+   fixed in the same change, the PR closes it; if it is not, the issue stands on its
+   own. "I'll mention it in the summary" is how findings get lost.
+2. **Work that needs a plan gets an issue before it gets code**, using the standing
+   template: goal, milestone, scope/design, acceptance criteria, test plan.
+3. **The board is not optional.** Issues belong on the org project board
+   (`https://github.com/orgs/RimSynapse/projects/2`) and must move through
+   Backlog → In progress → Testing → Done as the work does. A board showing 0 Done
+   while a 13-child epic has shipped is worse than no board — it actively misleads.
+4. **Milestones carry the release, the board carries the state.** When they disagree,
+   one of them is lying; reconcile rather than picking a favourite.
+5. **Process fixes count as work.** Guards, scripts and rules earned the hard way
+   (`verify-binaries`, `verify-metadata`, `sync-wiki`) are themselves issues and PRs,
+   not silent additions.
+
+Managing the board needs a scope the default token lacks:
+
+```bash
+gh auth refresh -s read:project,project
+```
+
+Without it `gh project` fails and — the trap — `gh issue view --json projectItems`
+returns an **empty list rather than an error**, which reads as "not on the board" for
+every issue. Do not conclude anything about board membership on a token that cannot
+see projects.
+
 ## Binary compatibility (the rule that broke three mods)
 
 Companion DLLs bind to **exact method signatures**. Appending an optional parameter
