@@ -65,6 +65,37 @@ The harness lives in the `Repo-MCP` repo (`harness/*.ps1`); the in-game suite is
   `execute_game_tool` must stay flagged — it can launder any mutation.
 - Never assume all registered tools fit in a prompt; the 2k-window floor governs.
 
+## Release flow
+
+Run these in order. Every step exists because skipping it has shipped a defect.
+
+1. **Changelog into both description copies.** Add the release entry to
+   `About/steam_description.txt` **and** the `<description>` block inside `About/About.xml`,
+   and bump the version line in each plus `<modVersion>`. These are separate copies of the
+   same text — updating one and not the other is exactly how v0.6.0 shipped showing v0.5.2
+   in the in-game mod list. Update the roadmap in both when it changes.
+2. **Check the docs captured the change.** Anything a player or mod builder needs to know
+   belongs in `Learning/*.md` (injected into RimWorld's Learning Helper) and, for builder
+   docs, in `docs/COMPANION_MODS.md` — these mirror each other and must stay identical.
+3. **Push the GitHub wiki** with `.\harness\sync-wiki.ps1` (`-WhatIf` to preview). The
+   wiki is a separate git repo (`<repo>.wiki.git`) whose source is `Learning/`; nothing
+   syncs it automatically, so the "Official Wiki" link in every description goes stale
+   on its own. The script also deletes pages whose source file is gone, so renamed docs
+   stop being served under their old titles.
+4. **Run the gate** (below), fixing anything it reports.
+5. **Commit and push to `development`**, then open and merge the release-promotion PR into
+   `main` (use a merge commit — a release should keep its history).
+6. **Tag** `vX.Y.Z` on `main` and publish the GitHub Release; attach Core's DLLs and
+   `CHECKSUMS.sha256`.
+7. **Update the live Steam Workshop description for every mod** from
+   `About/steam_description.txt`. The local file is only the source of truth — it changes
+   nothing on the Workshop until it is pasted into each item's page.
+8. **Tell the user to upload the new builds** through the in-game uploader (Core first —
+   companions declare a dependency on it). This is the one step that cannot be automated:
+   there is no reliable CLI path, so the release is not actually live until they do it.
+   Re-run `verify-binaries.ps1` immediately beforehand, since the uploader takes whatever
+   is on disk. Per-mod Change Notes text lives in `About/steam_change_notes.txt`.
+
 ## Release gate
 
 Binaries have two sources of truth, and both have drifted before. Before tagging:
