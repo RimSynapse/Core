@@ -22,15 +22,16 @@ namespace RimSynapse.Patches
             var coreComp = Find.World.GetComponent<SynapseCoreWorldComponent>();
             if (coreComp == null) return;
 
-            // Check for resident pawn death
-            var pComp = __instance.TryGetComp<RimSynapse.Comps.SynapseCorePawnComp>();
-            if (pComp != null && pComp.isResident && __instance.Map != null && __instance.Faction != null)
+            // Check for resident pawn death. Residency is owned and answered by Regions and
+            // Territories as of 0.7; with no territory mod nobody is a resident and this never fires,
+            // which is the behaviour before the provider existed.
+            if (SynapseCoreProviders.IsResident(__instance) && __instance.Map != null && __instance.Faction != null)
             {
                 var faction = __instance.Faction;
                 var map = __instance.Map;
 
                 bool otherResidentAlive = map.mapPawns.AllPawns
-                    .Any(p => p != __instance && p.Faction == faction && p.RaceProps.Humanlike && !p.Dead && p.TryGetComp<RimSynapse.Comps.SynapseCorePawnComp>()?.isResident == true);
+                    .Any(p => p != __instance && p.Faction == faction && p.RaceProps.Humanlike && !p.Dead && SynapseCoreProviders.IsResident(p));
 
                 if (!otherResidentAlive)
                 {
