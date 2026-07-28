@@ -140,11 +140,8 @@ namespace RimSynapse.Comps
                     if (map?.mapPawns?.FreeColonists == null || !map.mapPawns.FreeColonists.Any()) return 0.5f;
                     return (float)map.mapPawns.FreeColonists.Average(p => p.needs?.mood?.CurLevelPercentage ?? 0.5f);
                 case "PopulationDensity":
-                    if (map != null && map.Tile >= 0 && SynapseCoreWorldComponent.GetPopulationDensityDelegate != null)
-                    {
-                        return SynapseCoreWorldComponent.GetPopulationDensityDelegate(map.Tile);
-                    }
-                    return 0f;
+                    if (map == null) return 0f;
+                    return SynapseCoreProviders.PopulationDensityAt(map.Tile);
                 case "FoodReserves":
                     float totalNutrition = 0f;
                     if (map?.listerThings != null)

@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Runs Core's behaviour suites without RimWorld, Unity, Harmony or a game install.
+#
+# Core is mostly not testable this way — it is an HTTP client, a Harmony patch set and a pile of
+# WorldComponent state, all of which need the game. What is testable is the parts deliberately
+# built without game dependencies, and the public surfaces other mods compile against. Those are
+# worth pinning precisely because a break in them is silent: a companion mod registers into a
+# renamed member, gets no error, and simply never answers.
+#
+#   Ubuntu/WSL:  sudo apt-get install -y mono-mcs mono-runtime
+#   Then:        Tests/run-tests.sh
+#
+# Exits non-zero if any suite fails to build or fails an assertion. Each binary is removed before
+# its build so a compile failure can never be masked by a stale binary reporting a stale pass.
+set -u
+
+cd "$(dirname "$0")/.." || exit 1
+
+SRC=Source
+OUT="${TMPDIR:-/tmp}/core-tests"
+mkdir -p "$OUT"
+
+MCS_FLAGS="-target:exe -langversion:latest -nowarn:0169,0414,0649,0219"
+failures=0
+
+run_suite() {
+    name=$1; shift
+    binary="$OUT/$name.exe"
+    rm -f "$binary"
+
+    if ! mcs $MCS_FLAGS -out:"$binary" "$@"; then
+        echo "BUILD FAILED: $name"
+        failures=$((failures + 1))
+        return
+    fi
+
+    if ! mono "$binary"; then
+        failures=$((failures + 1))
+    fi
+}
+
+run_suite providers \
+    Tests/Stubs.cs Tests/ProviderTests.cs \
+    $SRC/SynapseCoreProviders.cs
+
+echo
+if [ "$failures" -eq 0 ]; then
+    echo "ALL SUITES PASSED"
+    exit 0
+fi
+
+echo "$failures SUITE(S) FAILED"
+exit 1

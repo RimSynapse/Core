@@ -45,11 +45,7 @@ namespace RimSynapse.Comps
 
             if (target.Tile >= 0)
             {
-                int pop = 0;
-                if (SynapseCoreWorldComponent.GetPopulationDensityDelegate != null)
-                {
-                    pop = SynapseCoreWorldComponent.GetPopulationDensityDelegate(target.Tile);
-                }
+                int pop = SynapseCoreProviders.PopulationDensityAt(target.Tile);
                 float raidMult = 1f / (1f + Props.motivatedRaidPopulationDensityFactor * pop);
                 float joinMult = Props.populationDensityJoinBase + (Props.populationDensityJoinFactor * pop);
                 joinMult = UnityEngine.Mathf.Clamp(joinMult, 0.1f, 5.0f);
