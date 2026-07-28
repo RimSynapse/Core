@@ -77,11 +77,7 @@ namespace RimSynapse.Comps
             CountLegendaryArt(map, out legendaryArtCount, out legendaryArtValue);
 
             // Population density
-            int popDensity = 0;
-            if (map.Tile >= 0 && SynapseCoreWorldComponent.GetPopulationDensityDelegate != null)
-            {
-                popDensity = SynapseCoreWorldComponent.GetPopulationDensityDelegate(map.Tile);
-            }
+            int popDensity = SynapseCoreProviders.PopulationDensityAt(map.Tile);
 
             // Format output using templates
             return FormatMetricsOutput(map, freeColonists, totalWealth, silverCount, totalNutrition,

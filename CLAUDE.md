@@ -94,6 +94,49 @@ run no tests.
 - The guard: `Core_AllModsInstantiated` in the TestRunner fails if any mod dies at
   startup. Run the full suite after touching any public surface.
 
+## Extension surfaces: who owns a mechanic
+
+**The mod that introduces a mechanic owns its state and its logic.** Core does not
+store other mods' data — it brokers access to it. A consumer asks Core and gets a
+documented answer whether or not anybody registered. The test of whether this is
+being followed: **a producer mod must build and run with Core absent.**
+
+Core brokers two kinds of extension. They are not interchangeable, and picking the
+wrong one is how a fifth undocumented convention gets invented:
+
+| | Broadcast hook | Provider |
+|---|---|---|
+| Subscribers | many | exactly one authority |
+| Direction | push | pull |
+| Returns | nothing | a value |
+| Where | events on `SynapseCoreContext`, `SynapseLetterContextHook`, `ContextAssembler` | `SynapseCoreProviders` |
+| Use when | several mods may each contribute something | one mod owns the question |
+
+Rules for provider slots:
+
+- Every slot is a **public static property**, nothing more exotic. Producers can only
+  reach it by reflection (`GenTypes.GetTypeInAnyAssembly` → `GetProperty` → `SetValue`),
+  because they must not reference Core's assembly. A slot whose registration needs a
+  Core type in its signature defeats the point.
+- Every slot **documents its unregistered value**, and consumers call the accessor
+  (`PopulationDensityAt`, `IsResident`) rather than null-checking the slot. Consumers
+  inventing their own fallbacks is how two callers end up disagreeing about what
+  "nobody answered" means.
+- Registration is logged; so is the first use of an unregistered slot, **once**. These
+  are read from storyteller weighting passes, so a per-call log line is a performance
+  bug as well as noise.
+- A throwing provider is contained and logged — it must not take its caller down.
+- Producers log all three branches: registered / member missing / Core absent. See
+  `RegionsAndTerritoriesMod.TryRegisterPopulationDelegate`, which is the reference
+  implementation.
+
+Deprecating a slot follows the binary-compatibility rule above: keep the old member as
+a forwarding shim for one release and mark it `[Obsolete]` — see
+`SynapseCoreWorldComponent.GetPopulationDensityDelegate`, which
+`SynapseCoreProviders.PopulationDensity` still falls back to.
+
+`Tests/run-tests.sh` covers this surface without a game.
+
 ## Build and test loop
 
 The harness lives in the `Repo-MCP` repo (`harness/*.ps1`); the in-game suite is the
