@@ -12,28 +12,18 @@ RimSynapse Core is a powerful, asynchronous background engine that natively conn
 
 The LLM Direct Action Console acts as an AI-powered command center. You simply open the console, type what you want in plain English, and the Storyteller LLM acts as an active agent to compile, translate, and execute native in-game tool calls automatically in real-time.
 
-[b]Example Command Input:[/b] [i]"Make Fred have 20 Shooting, remove the Bipolar trait from Sarah, and start a fire on the solar generator."[/i]
-
-[b]How it works:[/b]
-
-[b]Type in plain English:[/b] State your desires, scripts, or debug requests naturally.
-[b]AI Translation:[/b] The storyteller parses your input, mapping it to real C# game methods (modifying pawn skills, altering traits, spawning disasters, adjusting weather, etc.).
-[b]Instant Execution:[/b] The commands run natively on the active tick without breaking immersion.
-
 ---
 
 [h2]Key Features[/h2]
 [list]
-[*] [b]LLM Direct Action Console (Command in Plain English!):[/b] Control the game world using natural language! Open the Direct Action Console, type what you want in plain English (e.g. [i]"Make Fred have 20 Shooting, remove the Bipolar trait from Sarah, and start a fire on the solar generator"[/i]), and watch the Storyteller LLM act as an active agent, translating your request into native in-game tool calls and executing them in real-time!
 [*] [b]Universal Backend Support:[/b] Connects natively to LM Studio, Ollama, or any OpenAI-compatible local API (e.g. OpenRouter, LocalAI) without complex setups.
 [*] [b]Background Threading:[/b] Never drops a frame. All LLM requests are queued, processed, and sanitized asynchronously on separate threads.
-[*] [b]Dynamic Priority Queue:[/b] Intelligently manages hundreds of requests with an advanced Linux-style top-monitor queue system, prioritizing critical events and starving obsolete prompts.
-[*] [b]Auto-Discovery and Keep-Alive:[/b] Automatically detects active models and manages keep-alive pings to ensure your LLMs don't go to sleep.
-[*] [b]Event Tracking Ledger:[/b] Snapshots colony wealth, nutrition, and colonist status chronologically when events trigger, feeding the AI perfect narrative context.
+[*] [b]Dynamic Priority Queue:[/b] Manages hundreds of requests with a Linux-style top-monitor queue, prioritizing critical events and starving obsolete prompts.
+[*] [b]Auto-Discovery and Keep-Alive:[/b] Detects active models and sends keep-alive pings so your LLMs never sleep.
+[*] [b]Event Tracking Ledger:[/b] Snapshots colony wealth, nutrition and colonist status when events trigger, feeding the AI narrative context.
 [*] [b]Faction Perception Tracking:[/b] Factions dynamically adjust their subjective perception of your wealth and strength through visits and trade.
-[*] [b]Colony Snapshots:[/b] Captures snapshots of the colony's mood, health, and stats when events occur to provide rich context.
-[*] [b]Memory Infrastructure:[/b] Provides the per-pawn memory bank, weighted tag system, and decay engine used by companion mods to give colonists persistent, evolving memories.
-[*] [b]Opportunistic Task Scheduling:[/b] A background task manager that feeds low-priority LLM requests (backstory generation, memory creation) into idle GPU cycles without impacting gameplay performance.
+[*] [b]Memory Infrastructure:[/b] The per-pawn memory bank, weighted tags and decay engine companion mods use to give colonists evolving memories.
+[*] [b]Opportunistic Task Scheduling:[/b] Feeds low-priority requests (backstory, memory creation) into idle GPU cycles without impacting performance.
 [/list]
 
 ---
@@ -51,79 +41,41 @@ These ship when they are ready - no dates.
 
 [h2]Changelog (v0.6.1)[/h2]
 [list]
-[*] [b]FIXED - mod list metadata:[/b] The in-game mod list still showed v0.5.2 with no v0.6.0 notes. Version and changelog now agree in every place they are stated.
+[*] [b]FIXED - mod list metadata:[/b] The in-game mod list still showed v0.5.2 with no v0.6.0 notes. Version and changelog now agree everywhere they are stated.
 [*] [b]Roadmap updated:[/b] 0.7 is now Regions and Territories compatibility - the groundwork the Factions work depends on. Everything after it shifts up one release.
 [/list]
 
 ---
+
 [h2]Changelog (v0.6.0) - Agent and Tool Foundation[/h2]
 [b]The storyteller can now plan and carry out multi-step work on its own - and it is built to stay fast on modest hardware.[/b]
-
-[b]The agent[/b]
 [list]
 [*] [b]NEW - Multi-step plans that wait on the game:[/b] The agent composes scripts that call game tools, pause until something is true (a pawn reaches a spot, picks up a weapon, goes down), see what happened, and keep going. No more one-shot commands that fail because the pawn had not arrived yet.
-[*] [b]NEW - Scripts survive saving and loading:[/b] A plan waiting on a game condition picks up where it left off after a reload, with its timeout re-anchored so it does not instantly give up.
-[*] [b]NEW - Run controls:[/b] Turn limits, a per-run request budget, and a stop button. Nothing can spiral.
-[*] [b]NEW - Autonomous actions are gated:[/b] Anything the agent does on its own initiative cannot change your colony unless you switch on "Allow autonomous mutations". Your own commands are unaffected.
-[*] [b]NEW - The storyteller escalates when reality surprises it:[/b] When a scripted feature hits something it was never taught to handle, it hands the situation to the agent instead of quietly giving up. Off by default, rate-limited when on.
-[*] [b]NEW - Agent Runs inspector:[/b] The Script Debugger now shows what the agent decided each turn, what it ran, what came back, what it cost, and lets you cancel a run.
-[*] [b]FIXED - Silent failures:[/b] A mistyped tool used to look like a success, and a malformed plan was dropped with nothing in the log. Both are now reported plainly.
+[*] [b]NEW - Plans survive saving and loading,[/b] resuming at the right step with their timeout re-anchored so they do not instantly give up.
+[*] [b]NEW - Run controls:[/b] turn limits, a per-run request budget, and a stop button. Nothing can spiral.
+[*] [b]NEW - Autonomous actions are gated:[/b] anything the agent does on its own initiative cannot change your colony unless you enable "Allow autonomous mutations". Your own commands are unaffected.
+[*] [b]NEW - The storyteller escalates when reality surprises it,[/b] handing situations it was never taught to handle to the agent instead of quietly giving up. Off by default, rate-limited when on.
+[*] [b]NEW - Agent Runs inspector:[/b] see what the agent decided each turn, what it ran, what came back and what it cost - and cancel a run.
+[*] [b]NEW - It measures your setup instead of guessing:[/b] Core times real end-to-end responses and scales its ambition to your machine, stepping back down the moment responses slow.
+[*] [b]NEW - Designed down to a 2k context window:[/b] the agent is told about the few tools your request actually needs and searches for the rest mid-conversation.
+[*] [b]NEW - Conversations get priority[/b] (aiming under half a second); background work sizes itself to the in-game night and always yields to you.
+[*] [b]NEW - Cloud API cost control:[/b] cloud providers are budgeted by token cost, with an experimental toggle to ignore cost.
+[*] [b]FIXED - Silent failures:[/b] a mistyped tool used to look like a success and a malformed plan was dropped with nothing in the log.
 [/list]
-
-[b]Speed and small hardware[/b]
-[list]
-[*] [b]NEW - It measures your setup instead of guessing:[/b] Core times real end-to-end responses and picks a capability tier from the evidence - starting conservative, scaling up only when your machine proves it can, and stepping back down the moment responses slow.
-[*] [b]NEW - Designed down to a 2k context window:[/b] The agent is told about the handful of tools your request actually needs, and can search for the rest mid-conversation. A vague request now produces the smallest prompt instead of the largest.
-[*] [b]NEW - Faster answers:[/b] Obviously-useful lookups run before the first request and are included up front, so simple requests often finish in one round trip instead of two. Large results travel as a short excerpt the model can expand on demand.
-[*] [b]NEW - Conversations get priority:[/b] Colonist dialogue aims for under half a second. Background work (like nightly reviews) sizes itself to finish inside the in-game night, learns which hours are usually quiet, and always yields to whatever you are doing.
-[*] [b]NEW - Cloud API cost control:[/b] Cloud providers are treated as pay-per-token by default and budgeted accordingly, with an experimental toggle to ignore cost and simply go as rich as latency allows.
-[/list]
-
-[b]Compatibility[/b]
-[list]
-[*] [b]Your saves are fine.[/b] v0.5.x saves load unchanged.
-[*] [b]The other RimSynapse mods are fine.[/b] Verified by running the actual published v0.5.2 builds of every companion mod against this version - all loaded cleanly with the full test suite passing.
-[*] [b]Other mods built against RimSynapse are fine.[/b] No published code interface was removed, and an automated test now guards that.
-[/list]
+[b]Compatibility:[/b] v0.5.x saves load unchanged. The other RimSynapse mods are unaffected - verified by running their published v0.5.2 builds against this release. No published code interface was removed, so mods built against RimSynapse keep working.
 
 ---
 
-[h2]Changelog (v0.5.2)[/h2]
-[list]
-[*] [b]FIXED - Core failed to load:[/b] A Harmony patch bound the wrong parameter name on the game's knowledge database, which threw while patching and stopped RimSynapse Core initialising at all.
-[*] [b]FIXED - Learning Helper crash:[/b] Wiki guides added to RimWorld's Learning Helper threw an exception every frame. Guide names are now valid identifiers and duplicates are skipped.
-[*] [b]FIXED - Developer scripting paths:[/b] The developer file channel pointed at one machine's hard-coded drive, so it silently did nothing anywhere else. It now follows your install.
-[*] [b]Licence:[/b] Now PolyForm Noncommercial 1.0.0. Free to use, modify and share for any noncommercial purpose.
-[/list]
-
----
-
-[h2]Changelog (v0.5.1)[/h2]
-[list]
-[*] [b]NEW: API-Level Thinking Controls:[/b] Support for OpenAI/LM Studio reasoning and thinking tokens configuration in mod options.
-[*] [b]NEW: Historical Records and Letter Archival:[/b] Automatically generates "Colony Established" and "Colony Named" ceremony event records and sends letter alerts.
-[*] [b]NEW: Stele Links stored in Core:[/b] Moved Stele Link monument bindings and colony ceremony logs to `SynapseCoreWorldComponent` for unified tracking.
-[*] [b]NEW: Resident Life Support:[/b] Resident pawns will cook simple meals in their inventories near heat sources if low on food.
-[*] [b]Pawn-level Job Tracking:[/b] Relocated job and location tracking to per-pawn `SynapseCorePawnComp` (`CompTickRare`) to optimize CPU usage.
-[*] [b]Idle Backstory memory queueing:[/b] Resident pawns are flagged as high-priority, queueing backstory generation in background cycles.
-[/list]
-
----
-
-[h2]Changelog (v0.5.0)[/h2]
-[list]
-[*] [b]Multi-Provider LLM Balancing:[/b] Enhanced multi-provider load balancing and capabilities filtering.
-[*] [b]Full RimWorld 1.6 & DLC Compatibility:[/b] Deep optimizations to support active storytellers across all official expansions.
-[/list]
+[b]Older releases:[/b] see the full changelog at [url=https://github.com/RimSynapse/Core/blob/main/CHANGELOG.md]github.com/RimSynapse/Core[/url]
 
 ---
 
 [h2]Compatibility Matrix[/h2]
 [list]
-[*] [b]Royalty DLC:[/b] Compatible and Optional. Integrates noble titles and psycast memories if active. Generates arrogant noble decrees and custom empire quests.
-[*] [b]Ideology DLC:[/b] Compatible and Optional. Integrates precepts, rituals, and conversions if active. Reframes quests as holy crusades and divine visions.
-[*] [b]Biotech DLC:[/b] Compatible and Optional. Integrates xenotypes, mechinators, and genetic history if active. Describes mechanitor threats as cold satellite broadcasts.
-[*] [b]Anomaly DLC:[/b] Compatible and Optional. Integrates entity encounters and void studies if active. Translates events into chilling whispers and void phenomena.
+[*] [b]Royalty DLC:[/b] Optional. Integrates noble titles and psycast memories; generates arrogant noble decrees and empire quests.
+[*] [b]Ideology DLC:[/b] Optional. Integrates precepts, rituals and conversions; reframes quests as holy crusades and divine visions.
+[*] [b]Biotech DLC:[/b] Optional. Integrates xenotypes, mechanitors and genetic history; describes mech threats as cold satellite broadcasts.
+[*] [b]Anomaly DLC:[/b] Optional. Integrates entity encounters and void studies; translates events into chilling whispers and void phenomena.
 [*] [b]Odyssey DLC:[/b] Fully Compatible and Optimized. Handles space/orbital-aware narrative integrations.
 [/list]
 
