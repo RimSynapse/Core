@@ -232,14 +232,33 @@ namespace RimSynapse
                     if (System.IO.Directory.Exists(candidate))
                     {
                         _scriptingDir = candidate;
+                        LogResolvedDir("RIMSYNAPSE_ROOT");
                         return _scriptingDir;
                     }
                 }
 
                 string modRoot = RimSynapseMod.Instance?.Content?.RootDir;
                 _scriptingDir = !string.IsNullOrEmpty(modRoot) ? modRoot : GenFilePaths.ConfigFolderPath;
+                LogResolvedDir(!string.IsNullOrEmpty(modRoot) ? "mod RootDir" : "ConfigFolderPath fallback");
                 return _scriptingDir;
             }
+        }
+
+        /// <summary>
+        /// Announce the directory the file bridge will poll, once, naming how it was resolved.
+        ///
+        /// <para>The MCP side writes its request to a directory it resolves independently, and when
+        /// the two disagree the only symptom is a ten-second timeout whose message used to guess at
+        /// the game's state. Three separate investigations went looking in the wrong place because
+        /// nothing said where the game was actually watching. One line makes that a glance.</para>
+        /// </summary>
+        private static void LogResolvedDir(string via)
+        {
+            try
+            {
+                SynapseLogger.Message($"[RimSynapse] Tool bridge polling directory: {_scriptingDir} (resolved via {via}).");
+            }
+            catch { }
         }
 
         private static string ScriptingPath(string fileName)
