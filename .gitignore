@@ -21,3 +21,13 @@ __pycache__/
 # MSBuild intermediates
 Source/obj/
 Source/bin/
+
+# Bridge IPC scratch — written at runtime, never source
+tool_input.json
+tool_output.json
+script_input.json
+script_output.log
+game_state.json
+game_state_request.json
+storyteller_input.txt
+storyteller_output.log
