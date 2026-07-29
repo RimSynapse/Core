@@ -155,6 +155,45 @@ The harness lives in the `Repo-MCP` repo (`harness/*.ps1`); the in-game suite is
 - A `build.ps1 -Repo X` rebuilds only X and its deps — after public-surface changes
   in Core, always do a **full** build so companions recompile against it.
 
+## The in-game tool bridge (file IPC)
+
+`list_game_tools` and `execute_game_tool` reach a running game through **files**, not a
+socket. Both sides resolve the directory independently, and if they disagree the only
+symptom is a ten-second timeout — so the contract is written down here.
+
+**Game side** — `SynapseGameComponent.ScriptingDir`, in priority order:
+
+1. `%RIMSYNAPSE_ROOT%\Core`, if the env var is set and that directory exists
+2. the Core mod's own `Content.RootDir` (whatever folder RimWorld loaded Core from)
+3. `GenFilePaths.ConfigFolderPath` — the fallback, and note this follows
+   `-savedatafolder`
+
+**MCP side** — `Repo-MCP/server/src/tools/gameIpc.ts`: `workspaceRoot()\Core`, where
+`workspaceRoot()` also honours `RIMSYNAPSE_ROOT`.
+
+They line up because both prefer `RIMSYNAPSE_ROOT`, which the manifest passes to the MCP
+server and the game inherits when the server spawns it. They stop lining up if that var is
+unset on one side, or if RimWorld loads Core from somewhere unexpected — the Workshop copy
+rather than the local one, say.
+
+**Do not infer which directory is in play — read it.** Core logs it once at first
+resolution:
+
+```
+[RimSynapse] Tool bridge polling directory: C:\github\rimsynapse\Core (resolved via RIMSYNAPSE_ROOT).
+```
+
+Files exchanged in that directory: `tool_input.json` / `tool_output.json`,
+`script_input.json` / `script_output.log`, `game_state_request.json` / `game_state.json`,
+`storyteller_input.txt` / `storyteller_output.log`. All are runtime scratch and gitignored;
+none are source.
+
+**The poll runs from `GameComponentUpdate`**, so it only fires once a `Game` exists and
+only while the main thread is actually updating. A request written and never consumed means
+the game is not polling — it is pre-game, or hung — not that the paths are wrong. That
+distinction cost three investigations; check `Responding` on the process before suspecting
+the path.
+
 ## Log conventions (the classifier reads these)
 
 - Handled warnings must not look like thrown exceptions: log the type as
