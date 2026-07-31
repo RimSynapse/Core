@@ -274,6 +274,20 @@ the path.
   callers must not log error payloads under a `[Result]` prefix.
 - Test output goes through `Log.Message` (never `Log.Error` — it double-counts as a
   blocking entry). Format: `[SYNAPSE-TEST] PASS|FAIL <case> | <detail>`.
+- **`Log.Error` is now classifiable by level.** `Patches/Patch_Log_Error.cs` prefixes
+  every `Verse.Log.Error(string)` with `[SYNAPSE-LOGERROR]`, and `readlog.ps1` keys on
+  that token (Repo-MCP#17) — a `Log.Error` from any mod, in any wording, is caught. Two
+  consequences: (1) the marker exempts `[SYNAPSE-TEST]` output and is idempotent, so keep
+  it that way if you touch `Patch_Log_Error.Mark`; (2) this made previously-invisible
+  errors visible, so a first run after a Core rebuild can surface a real error that older
+  "0 blocking" runs hid — triage it, do not re-hide it in the classifier. It surfaced
+  R&T#46 (183 world-gen `Faction.OfPlayer` calls) on its first outing. Errors logged
+  before `harmony.PatchAll()` are unmarked; the load-order check runs first by design and
+  carries its own token.
+- **Querying `Faction.OfPlayer` when it can be null spams a `Log.Error` each time** —
+  vanilla `FactionManager.OfPlayer` logs "Could not find player faction." on null. Use
+  `Faction.OfPlayerSilentFail` on any path that can run during world generation or before
+  a game exists; `?.` does not help, since the getter logs before the null-conditional.
 - `SynapseLogger.Message(msg, category)` — performance/tier lines use category
   `"performance"` and a `[Tier]`/`[Agent]` prefix.
 
