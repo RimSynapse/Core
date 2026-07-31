@@ -287,10 +287,26 @@ Run these in order. Every step exists because skipping it has shipped a defect.
 Binaries have two sources of truth, and both have drifted before. Before tagging:
 
 ```powershell
+.\harness\verify-branches.ps1          # nothing finished is sitting outside development
 .\harness\verify-metadata.ps1          # version + changelog agree in all three places
 .\harness\verify-binaries.ps1 -Build   # rebuild, then check every shipped DLL
 .\harness\release-manifest.ps1         # regenerate Core's Assemblies/CHECKSUMS.sha256
 ```
+
+`verify-branches.ps1` runs **first**, because everything after it verifies the wrong
+tree if a finished fix is sitting on a branch. It answers two questions, and the second
+is the one that matters: is a pull request open, and does any branch carry commits
+`development` lacks? A branch needs no PR to be lost. Psychology's counseling report path
+stayed hardcoded to `d:\github\rimsynapse\...` on `development` — failing on every other
+machine, silently, because the write is inside a `try` — while the fix sat finished on an
+unmerged branch. There were zero open PRs the entire time.
+
+**It reports; it never merges.** Commit counts lie after a squash merge: Core's
+`fix/wiki-concept-knowledge-rebind` showed 7 commits "not in development" while every one
+of its changes was already there by another route, with `development` since moved past
+it. The report names the files each branch would touch so that pending-versus-superseded
+call is cheap to make. Branches already merged to `main` are release records and are not
+reported.
 
 **Every mod states its version in three independent places** and they drift silently:
 `About.xml <modVersion>` (read by mod managers), `About.xml <description>` (the in-game
@@ -312,11 +328,14 @@ entry for the current version, or when About.xml stops being well-formed.
 
 ## Branch discipline
 
-- **Commit directly to `development`.** It is a single-maintainer project: a PR nobody
-  reviews is a queue, not a gate. Five accumulated in one session behind a permission
-  the assistant did not have, which delayed the work without improving it. Use a branch
-  when the change genuinely needs isolating — a risky refactor, or something to be
-  compared side by side — not by default.
+- **Developing on this machine, commit directly to `development`.** It is a
+  single-maintainer project: a PR nobody reviews is a queue, not a gate. Five accumulated
+  in one session behind a permission the assistant did not have, which delayed the work
+  without improving it. Use a branch only when the change genuinely needs isolating — a
+  risky refactor, or two approaches to compare side by side — not by default.
+- Work can still arrive on a branch from elsewhere: the gaming PC, an older session, a
+  branch opened for isolation and then forgotten. `verify-branches.ps1` in the release
+  gate is what finds it, because nothing else will.
 - The discipline the PR was standing in for still applies, and it is the important part:
   **build, run the full suite, and confirm `0 blocking` before pushing.** Multi-repo
   changes must land in dependency order (Core → Regions → companions → Factions →
