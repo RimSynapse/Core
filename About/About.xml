@@ -4,7 +4,7 @@
     <author>RimSynapse Team</author>
     <packageId>RimSynapse.Core</packageId>
     <url>https://github.com/RimSynapse/Core</url>
-    <modVersion>0.6.1</modVersion>
+    <modVersion>0.7.0</modVersion>
     <supportedVersions>
         <li>1.5</li>
         <li>1.6</li>
@@ -30,7 +30,7 @@
     </incompatibleWith>
     <description>
 Discord Community: https://discord.gg/eVBebZ2N9s
-Version: v0.6.1 (Target: RimWorld 1.6)
+Version: v0.7.0 (Target: RimWorld 1.6)
 
 RimSynapse - Core
 Official Wiki and Documentation: https://github.com/RimSynapse/Core/wiki
@@ -65,6 +65,10 @@ AI is incredibly cool, and having a framework to utilize powerful, no-cost local
 These ship when they are ready - no dates.
 
 --- Changelog ---
+v0.7.0 - Regions and Territories Compatibility
+- NEW - Load-order guard: a mod loaded before something it declares it must load after now reports one clear error at startup, instead of silently losing every type in its assembly and appearing installed while doing nothing.
+- Changed: every mod now targets .NET Framework 4.8, so any RimSynapse mod can reference any other. Previously a net472 mod could not, and the reference was dropped with only a build warning.
+- Changed: the metadata and wiki release gates now run automatically on every pull request, rather than when someone remembers to run them.
 v0.6.1
 - Fixed: the in-game mod list showed v0.5.2 with no 0.6.0 notes; version and changelog now agree everywhere
 - Roadmap updated: 0.7 is Regions and Territories compatibility (groundwork for Factions, which will require Empire)

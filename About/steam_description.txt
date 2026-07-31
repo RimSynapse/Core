@@ -1,5 +1,5 @@
 [b]Discord Community:[/b] [url=https://discord.gg/eVBebZ2N9s]https://discord.gg/eVBebZ2N9s[/url]
-[b]Version:[/b] v0.6.1 (Target: RimWorld 1.6)
+[b]Version:[/b] v0.7.0 (Target: RimWorld 1.6)
 
 [h1]RimSynapse - Core[/h1]
 [b][url=https://github.com/RimSynapse/Core/wiki]Official Wiki and Documentation[/url][/b]
@@ -37,6 +37,15 @@ The LLM Direct Action Console acts as an AI-powered command center. You simply o
 [*] [b]0.10 - Cross-Mod Capability Passes:[/b] Bringing every module back together for another pass over what the whole set can do.
 [/list]
 These ship when they are ready - no dates.
+
+---
+
+[h2]Changelog (v0.7.0) - Regions and Territories Compatibility[/h2]
+[list]
+[*] NEW - Load-order guard: a mod loaded before something it declares it must load after now reports one clear error at startup, instead of silently losing every type in its assembly and appearing installed while doing nothing.
+[*] Changed: every mod now targets .NET Framework 4.8, so any RimSynapse mod can reference any other. Previously a net472 mod could not, and the reference was dropped with only a build warning.
+[*] Changed: the metadata and wiki release gates now run automatically on every pull request, rather than when someone remembers to run them.
+[/list]
 
 ---
 
