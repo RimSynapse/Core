@@ -33,6 +33,11 @@ namespace RimSynapse
 
             RimSynapse.SynapseLogger.InitMainThread();
 
+            // Before anything else, and before defs are parsed: a mod loaded ahead of its own
+            // dependency resolves none of its types and dies without saying so. Reporting it here
+            // puts the explanation above the resulting wall of "Could not find a type named ...".
+            SynapseLoadOrderCheck.Verify();
+
             // Apply Harmony patches
             var harmony = new Harmony(HarmonyId);
             harmony.PatchAll();
