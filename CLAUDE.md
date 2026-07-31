@@ -86,6 +86,45 @@ and unmilestoned issues may go on it but are not required to. Closed items stay 
 board in **Done** rather than being archived — the board's job is to show that work
 shipped, and an archived card cannot do that.
 
+## The release train — what rides it, and what does not
+
+Not every issue belongs to a release. Four categories, carried as labels in every repo,
+and they are treated differently:
+
+| Label | On the train? | Rule |
+|---|---|---|
+| `release-target` | **yes** | The feature work the milestone exists to deliver. Milestones are scoped around these and nothing else. |
+| `harness` | no | Test and build tooling. Worked **opportunistically** — ideally in the release it is discovered in, otherwise pushed to the next. If one grows too expensive or starts holding a release, push it again. |
+| `process` | no | Build, CI and release process. Same rules as `harness`. |
+| `documentation` | **gate** | Not scheduled as features. Every outstanding docs issue is **evaluated and closed, committed and pushed, before a release goes out** — docs are part of the final review gate, not a milestone item. |
+| `qol` | no | Backlog. Opportunistic, and below `harness` in priority. Carries no milestone. |
+
+A `harness` or `process` issue sitting on a milestone means "try to get this done by
+then", not "this release is defined by it". Pushing one to the next milestone is a normal
+outcome, not a slip — the failure is letting it block a release, or letting it fall out of
+sight entirely.
+
+### Priority order
+
+Steady state:
+
+1. **Harness blockers** — a harness defect that makes results untrustworthy outranks
+   everything, because everything else is measured with it.
+2. **Release targets**
+3. **Harness discoveries** — newly found tooling defects that are not blocking
+4. **Process**
+5. **QoL**
+
+While cutting a release, the order changes:
+
+1. **Process** — the gates, the version bumps, the tag and merge
+2. **Documentation** — evaluate and close every outstanding docs issue first
+3. Everything else
+
+The reason harness sits at both the top and the middle: a harness issue that makes a
+run lie is a blocker, and a harness issue that is merely annoying is not. Judge by whether
+it can produce a false green, not by which component it lives in.
+
 ## Release gates — which run in CI, which are yours to run
 
 Three gates exist, and each was written after the defect it catches had already shipped.
