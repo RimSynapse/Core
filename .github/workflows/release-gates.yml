@@ -1,0 +1,75 @@
+name: Release gates
+
+# Core #45. All three release gates were written after the defect they catch had already
+# shipped, and all three still run only when someone remembers to run them — which is the
+# same failure mode they were built to fix.
+#
+# Two of the three run here:
+#   verify-metadata.ps1  version and changelog agreement across About.xml <modVersion>,
+#                        the embedded <description>, and steam_description.txt.
+#   sync-wiki.ps1        Learning/ docs not yet published to the repo wiki.
+#
+# verify-binaries.ps1 is deliberately NOT here: it needs a build against RimWorld's
+# reference assemblies, which are not available on a hosted runner. It stays a documented
+# pre-tag step. Which gates are CI-enforceable and which are local is recorded in #45
+# rather than left implicit.
+
+on:
+  pull_request:
+    paths:
+      - 'About/**'
+      - 'Learning/**'
+  push:
+    branches: [development]
+    paths:
+      - 'About/**'
+      - 'Learning/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: windows-latest
+
+    steps:
+      # Both checkouts are siblings under the workspace on purpose. lib.ps1 resolves a
+      # workspace root at dot-source time, before -Root is applied, by walking up from
+      # the harness folder; a sibling layout means that walk finds this checkout instead
+      # of throwing. -Root is then passed explicitly so the gate inspects this mod and
+      # never silently falls back to scanning something else.
+      - name: Check out the mod
+        uses: actions/checkout@v4
+        with:
+          path: ${{ github.event.repository.name }}
+
+      - name: Check out the harness
+        uses: actions/checkout@v4
+        with:
+          repository: RimSynapse/Repo-MCP
+          path: Repo-MCP
+
+      - name: Metadata gate
+        shell: pwsh
+        run: >
+          ./Repo-MCP/harness/verify-metadata.ps1
+          -Root "${{ github.workspace }}/${{ github.event.repository.name }}"
+
+      - name: Wiki drift gate
+        shell: pwsh
+        run: |
+          $json = ./Repo-MCP/harness/sync-wiki.ps1 `
+            -Root "${{ github.workspace }}/${{ github.event.repository.name }}" -WhatIf
+          $json
+          $result = $json | ConvertFrom-Json
+
+          # -WhatIf reports pending changes and exits 0, so drift is not a "problem" to the
+          # script. For a gate it is exactly the thing being gated, so fail on it here.
+          if (-not $result.ok) {
+            throw "sync-wiki reported problems: $($result.problems | ConvertTo-Json -Depth 6)"
+          }
+          $drift = @($result.synced | Where-Object { $_.result -eq 'would change' })
+          if ($drift.Count -gt 0) {
+            throw "Learning/ docs are ahead of the wiki. Run sync-wiki.ps1 to publish them."
+          }

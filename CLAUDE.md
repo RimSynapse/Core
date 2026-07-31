@@ -79,6 +79,78 @@ in). Two routes, and the second is far faster:
 Real mouse actions (`computer` clicks/keys) work on these React controls; synthetic
 `.click()` from injected JS frequently does not.
 
+### What goes on the board
+
+Every open issue in the **active and next milestone** goes on the board. Older-milestone
+and unmilestoned issues may go on it but are not required to. Closed items stay on the
+board in **Done** rather than being archived — the board's job is to show that work
+shipped, and an archived card cannot do that.
+
+## The release train — what rides it, and what does not
+
+Not every issue belongs to a release. Four categories, carried as labels in every repo,
+and they are treated differently:
+
+| Label | On the train? | Rule |
+|---|---|---|
+| `release-target` | **yes** | The feature work the milestone exists to deliver. Milestones are scoped around these and nothing else. |
+| `harness` | no | Test and build tooling. Worked **opportunistically** — ideally in the release it is discovered in, otherwise pushed to the next. If one grows too expensive or starts holding a release, push it again. |
+| `process` | no | Build, CI and release process. Same rules as `harness`. |
+| `documentation` | **gate** | Not scheduled as features. Every outstanding docs issue is **evaluated and closed, committed and pushed, before a release goes out** — docs are part of the final review gate, not a milestone item. |
+| `qol` | no | Backlog. Opportunistic, and below `harness` in priority. Carries no milestone. |
+
+A `harness` or `process` issue sitting on a milestone means "try to get this done by
+then", not "this release is defined by it". Pushing one to the next milestone is a normal
+outcome, not a slip — the failure is letting it block a release, or letting it fall out of
+sight entirely.
+
+### Priority order
+
+Steady state:
+
+1. **Harness blockers** — a harness defect that makes results untrustworthy outranks
+   everything, because everything else is measured with it.
+2. **Release targets**
+3. **Harness discoveries** — newly found tooling defects that are not blocking
+4. **Process**
+5. **QoL**
+
+While cutting a release, the order changes:
+
+1. **Process** — the gates, the version bumps, the tag and merge
+2. **Documentation** — evaluate and close every outstanding docs issue first
+3. Everything else
+
+The reason harness sits at both the top and the middle: a harness issue that makes a
+run lie is a blocker, and a harness issue that is merely annoying is not. Judge by whether
+it can produce a false green, not by which component it lives in.
+
+## Release gates — which run in CI, which are yours to run
+
+Three gates exist, and each was written after the defect it catches had already shipped.
+Two now run in CI (`.github/workflows/release-gates.yml`, in every mod repo) on any PR
+and any push to `development` touching `About/` or `Learning/`:
+
+| Gate | Where it runs | What it catches |
+|---|---|---|
+| `verify-metadata.ps1` | **CI** | the three version locations disagreeing; `steam_description.txt` over Steam's silent 8000-character cap |
+| `sync-wiki.ps1 -WhatIf` | **CI** | `Learning/` docs not published to the repo wiki |
+| `verify-binaries.ps1` | **manual, pre-tag** | a committed DLL that does not match a fresh build of its own source |
+
+`verify-binaries.ps1` cannot run on a hosted runner: it needs a build against RimWorld's
+reference assemblies, which are not available there. **Run it by hand before every tag.**
+
+**Two things CI does not catch, so do not read a green run as more than it is:**
+
+- `verify-metadata.ps1` checks that the three version locations agree with *each other*,
+  not that they agree with the source tree. Regions-and-Territories passes the gate today
+  while declaring `0.6.2` over a 0.7 source tree — internally consistent, and wrong. A
+  version bump is still a human decision at cut time.
+- `sync-wiki.ps1` **skips** a repo whose wiki has never been initialised, and a skip is a
+  pass. Regions-and-Territories, NVIDIA-Tool and TestRunner are skipped today. GitHub only
+  creates the wiki repo after the first page is made in the web UI, so an uninitialised
+  wiki is invisible to the gate rather than caught by it.
+
 ## Binary compatibility (the rule that broke three mods)
 
 Companion DLLs bind to **exact method signatures**. Appending an optional parameter
@@ -287,10 +359,26 @@ Run these in order. Every step exists because skipping it has shipped a defect.
 Binaries have two sources of truth, and both have drifted before. Before tagging:
 
 ```powershell
+.\harness\verify-branches.ps1          # nothing finished is sitting outside development
 .\harness\verify-metadata.ps1          # version + changelog agree in all three places
 .\harness\verify-binaries.ps1 -Build   # rebuild, then check every shipped DLL
 .\harness\release-manifest.ps1         # regenerate Core's Assemblies/CHECKSUMS.sha256
 ```
+
+`verify-branches.ps1` runs **first**, because everything after it verifies the wrong
+tree if a finished fix is sitting on a branch. It answers two questions, and the second
+is the one that matters: is a pull request open, and does any branch carry commits
+`development` lacks? A branch needs no PR to be lost. Psychology's counseling report path
+stayed hardcoded to `d:\github\rimsynapse\...` on `development` — failing on every other
+machine, silently, because the write is inside a `try` — while the fix sat finished on an
+unmerged branch. There were zero open PRs the entire time.
+
+**It reports; it never merges.** Commit counts lie after a squash merge: Core's
+`fix/wiki-concept-knowledge-rebind` showed 7 commits "not in development" while every one
+of its changes was already there by another route, with `development` since moved past
+it. The report names the files each branch would touch so that pending-versus-superseded
+call is cheap to make. Branches already merged to `main` are release records and are not
+reported.
 
 **Every mod states its version in three independent places** and they drift silently:
 `About.xml <modVersion>` (read by mod managers), `About.xml <description>` (the in-game
@@ -312,7 +400,19 @@ entry for the current version, or when About.xml stops being well-formed.
 
 ## Branch discipline
 
-- Work lands on `development` via PRs; `main` only via release promotion PRs.
+- **Developing on this machine, commit directly to `development`.** It is a
+  single-maintainer project: a PR nobody reviews is a queue, not a gate. Five accumulated
+  in one session behind a permission the assistant did not have, which delayed the work
+  without improving it. Use a branch only when the change genuinely needs isolating — a
+  risky refactor, or two approaches to compare side by side — not by default.
+- Work can still arrive on a branch from elsewhere: the gaming PC, an older session, a
+  branch opened for isolation and then forgotten. `verify-branches.ps1` in the release
+  gate is what finds it, because nothing else will.
+- The discipline the PR was standing in for still applies, and it is the important part:
+  **build, run the full suite, and confirm `0 blocking` before pushing.** Multi-repo
+  changes must land in dependency order (Core → Regions → companions → Factions →
+  TestRunner) so a mid-sequence build is never broken.
+- `main` only via release promotion PRs — that gate is real, because it marks a release.
 - Versioning is `0.<iteration>.<minor>`; never plan or tag anything `1.0`.
 - Companion repos commit their built `Assemblies/*.dll`; Core does not (its DLLs
   attach to GitHub Releases). `Source/obj/` is never tracked.

@@ -1,5 +1,5 @@
 [b]Discord Community:[/b] [url=https://discord.gg/eVBebZ2N9s]https://discord.gg/eVBebZ2N9s[/url]
-[b]Version:[/b] v0.6.1 (Target: RimWorld 1.6)
+[b]Version:[/b] v0.7.0 (Target: RimWorld 1.6)
 
 [h1]RimSynapse - Core[/h1]
 [b][url=https://github.com/RimSynapse/Core/wiki]Official Wiki and Documentation[/url][/b]
@@ -31,11 +31,21 @@ The LLM Direct Action Console acts as an AI-powered command center. You simply o
 [h2]Roadmap[/h2]
 [list]
 [*] [b]0.6 - Agent and Tool Foundation:[/b] ✅ Delivered in v0.6.0.
-[*] [b]0.7 - Regions and Territories Compatibility:[/b] Making the territory layer work cleanly alongside other major world and faction mods. A large undertaking on its own, and the groundwork everything faction-related depends on - the Factions work will build on the Empire mod.
-[*] [b]0.8 - Logic Externalization:[/b] Retiring hardcoded thresholds so the storyteller reasons about your colony's situation instead of following fixed rules.
-[*] [b]0.9 - Emergent Systems and Content:[/b] Faction archetypes for each DLC, caravans that travel the world map, settlement crises, faction capitals and travelling leaders, and richer colonist social dynamics.
+[*] [b]0.7 - Regions and Territories Compatibility:[/b] Basic pass-through alongside Empire Refactored and World Domination. Territories set tax rates; the regular game mechanics are left alone.
+[*] [b]0.8 - Demographics, News and Narrative Voice:[/b] Regional ideology and new map overlays, a newspaper driven by what actually happens on the world map, Aura's own personality, and local text-to-speech.
+[*] [b]0.9 - Factions and Living Societies:[/b] State ideologies, conversion and ideological spread, ideological sites and spies - building toward living NPC societies.
+[*] [b]0.10 - Cross-Mod Capability Passes:[/b] Bringing every module back together for another pass over what the whole set can do.
 [/list]
 These ship when they are ready - no dates.
+
+---
+
+[h2]Changelog (v0.7.0) - Regions and Territories Compatibility[/h2]
+[list]
+[*] NEW - Load-order guard: a mod loaded before something it declares it must load after now reports one clear error at startup, instead of silently losing every type in its assembly and appearing installed while doing nothing.
+[*] Changed: every mod now targets .NET Framework 4.8, so any RimSynapse mod can reference any other. Previously a net472 mod could not, and the reference was dropped with only a build warning.
+[*] Changed: the metadata and wiki release gates now run automatically on every pull request, rather than when someone remembers to run them.
+[/list]
 
 ---
 
@@ -50,19 +60,14 @@ These ship when they are ready - no dates.
 [h2]Changelog (v0.6.0) - Agent and Tool Foundation[/h2]
 [b]The storyteller can now plan and carry out multi-step work on its own - and it is built to stay fast on modest hardware.[/b]
 [list]
-[*] [b]NEW - Multi-step plans that wait on the game:[/b] The agent composes scripts that call game tools, pause until something is true (a pawn reaches a spot, picks up a weapon, goes down), see what happened, and keep going. No more one-shot commands that fail because the pawn had not arrived yet.
-[*] [b]NEW - Plans survive saving and loading,[/b] resuming at the right step with their timeout re-anchored so they do not instantly give up.
-[*] [b]NEW - Run controls:[/b] turn limits, a per-run request budget, and a stop button. Nothing can spiral.
-[*] [b]NEW - Autonomous actions are gated:[/b] anything the agent does on its own initiative cannot change your colony unless you enable "Allow autonomous mutations". Your own commands are unaffected.
-[*] [b]NEW - The storyteller escalates when reality surprises it,[/b] handing situations it was never taught to handle to the agent instead of quietly giving up. Off by default, rate-limited when on.
-[*] [b]NEW - Agent Runs inspector:[/b] see what the agent decided each turn, what it ran, what came back and what it cost - and cancel a run.
-[*] [b]NEW - It measures your setup instead of guessing:[/b] Core times real end-to-end responses and scales its ambition to your machine, stepping back down the moment responses slow.
-[*] [b]NEW - Designed down to a 2k context window:[/b] the agent is told about the few tools your request actually needs and searches for the rest mid-conversation.
-[*] [b]NEW - Conversations get priority[/b] (aiming under half a second); background work sizes itself to the in-game night and always yields to you.
-[*] [b]NEW - Cloud API cost control:[/b] cloud providers are budgeted by token cost, with an experimental toggle to ignore cost.
-[*] [b]FIXED - Silent failures:[/b] a mistyped tool used to look like a success and a malformed plan was dropped with nothing in the log.
+[*] [b]NEW - Multi-step plans that wait on the game:[/b] scripts that call game tools, pause until something is true, see what happened and keep going. They survive saving and loading, resuming at the right step.
+[*] [b]NEW - Run controls:[/b] turn limits, a per-run request budget, a stop button, and an Agent Runs inspector showing what was decided, run, observed and spent.
+[*] [b]NEW - Autonomous actions are gated[/b] behind "Allow autonomous mutations". Your own commands are unaffected.
+[*] [b]NEW - It measures your setup instead of guessing,[/b] scaling to your machine and stepping back down when responses slow. Designed down to a 2k context window, with conversations prioritised and background work yielding to you.
+[*] [b]NEW - Cloud API cost control,[/b] budgeted by token cost.
+[*] [b]FIXED - Silent failures:[/b] a mistyped tool looked like a success and a malformed plan was dropped with nothing in the log.
 [/list]
-[b]Compatibility:[/b] v0.5.x saves load unchanged. The other RimSynapse mods are unaffected - verified by running their published v0.5.2 builds against this release. No published code interface was removed, so mods built against RimSynapse keep working.
+[b]Compatibility:[/b] v0.5.x saves load unchanged, and no published code interface was removed - mods built against RimSynapse keep working.
 
 ---
 
