@@ -79,6 +79,39 @@ in). Two routes, and the second is far faster:
 Real mouse actions (`computer` clicks/keys) work on these React controls; synthetic
 `.click()` from injected JS frequently does not.
 
+### What goes on the board
+
+Every open issue in the **active and next milestone** goes on the board. Older-milestone
+and unmilestoned issues may go on it but are not required to. Closed items stay on the
+board in **Done** rather than being archived — the board's job is to show that work
+shipped, and an archived card cannot do that.
+
+## Release gates — which run in CI, which are yours to run
+
+Three gates exist, and each was written after the defect it catches had already shipped.
+Two now run in CI (`.github/workflows/release-gates.yml`, in every mod repo) on any PR
+and any push to `development` touching `About/` or `Learning/`:
+
+| Gate | Where it runs | What it catches |
+|---|---|---|
+| `verify-metadata.ps1` | **CI** | the three version locations disagreeing; `steam_description.txt` over Steam's silent 8000-character cap |
+| `sync-wiki.ps1 -WhatIf` | **CI** | `Learning/` docs not published to the repo wiki |
+| `verify-binaries.ps1` | **manual, pre-tag** | a committed DLL that does not match a fresh build of its own source |
+
+`verify-binaries.ps1` cannot run on a hosted runner: it needs a build against RimWorld's
+reference assemblies, which are not available there. **Run it by hand before every tag.**
+
+**Two things CI does not catch, so do not read a green run as more than it is:**
+
+- `verify-metadata.ps1` checks that the three version locations agree with *each other*,
+  not that they agree with the source tree. Regions-and-Territories passes the gate today
+  while declaring `0.6.2` over a 0.7 source tree — internally consistent, and wrong. A
+  version bump is still a human decision at cut time.
+- `sync-wiki.ps1` **skips** a repo whose wiki has never been initialised, and a skip is a
+  pass. Regions-and-Territories, NVIDIA-Tool and TestRunner are skipped today. GitHub only
+  creates the wiki repo after the first page is made in the web UI, so an uninitialised
+  wiki is invisible to the gate rather than caught by it.
+
 ## Binary compatibility (the rule that broke three mods)
 
 Companion DLLs bind to **exact method signatures**. Appending an optional parameter
