@@ -312,7 +312,16 @@ entry for the current version, or when About.xml stops being well-formed.
 
 ## Branch discipline
 
-- Work lands on `development` via PRs; `main` only via release promotion PRs.
+- **Commit directly to `development`.** It is a single-maintainer project: a PR nobody
+  reviews is a queue, not a gate. Five accumulated in one session behind a permission
+  the assistant did not have, which delayed the work without improving it. Use a branch
+  when the change genuinely needs isolating — a risky refactor, or something to be
+  compared side by side — not by default.
+- The discipline the PR was standing in for still applies, and it is the important part:
+  **build, run the full suite, and confirm `0 blocking` before pushing.** Multi-repo
+  changes must land in dependency order (Core → Regions → companions → Factions →
+  TestRunner) so a mid-sequence build is never broken.
+- `main` only via release promotion PRs — that gate is real, because it marks a release.
 - Versioning is `0.<iteration>.<minor>`; never plan or tag anything `1.0`.
 - Companion repos commit their built `Assemblies/*.dll`; Core does not (its DLLs
   attach to GitHub Releases). `Source/obj/` is never tracked.
