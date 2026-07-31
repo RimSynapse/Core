@@ -56,6 +56,14 @@ RimSynapse Core is a powerful, asynchronous background engine that natively brin
 --- A Personal Note ---
 AI is incredibly cool, and having a framework to utilize powerful, no-cost local models really appealed to me. RimWorld is relatively light on GPU overhead, making it the absolute perfect candidate to max out those graphics cards by running a local LLM in the background. My goal with RimSynapse is to push the boundaries of emergent storytelling using the hardware you already own.
 
+--- Roadmap ---
+0.6 - Agent and Tool Foundation: delivered in v0.6.0.
+0.7 - Regions and Territories Compatibility: basic pass-through alongside Empire Refactored and World Domination. Territories set tax rates; the regular game mechanics are left alone.
+0.8 - Demographics, News and Narrative Voice: regional ideology and new map overlays, a newspaper driven by what actually happens on the world map, Aura's own personality, and local text-to-speech.
+0.9 - Factions and Living Societies: state ideologies, conversion and ideological spread, ideological sites and spies - building toward living NPC societies.
+0.10 - Cross-Mod Capability Passes: bringing every module back together for another pass over what the whole set can do.
+These ship when they are ready - no dates.
+
 --- Changelog ---
 v0.6.1
 - Fixed: the in-game mod list showed v0.5.2 with no 0.6.0 notes; version and changelog now agree everywhere
