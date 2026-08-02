@@ -211,8 +211,9 @@ a forwarding shim for one release and mark it `[Obsolete]` — see
 
 ## Build and test loop
 
-The harness lives in the `Repo-MCP` repo (`harness/*.ps1`); the in-game suite is the
-`TestRunner` repo (loads last, only active with `-synapse-test`).
+The harness lives in `rimworld-claude-dev-tools` (`harness/*.ps1`; loaded globally via Claude
+settings, local copy at `C:\github\rimworld-claude-dev-tools` — this was forked out of the now-deprecated
+`Repo-MCP`); the in-game suite is the `TestRunner` repo (loads last, only active with `-synapse-test`).
 
 ```powershell
 .\harness\build.ps1              # all mods, dependency order: Core -> Regions -> companions -> Factions
@@ -240,7 +241,7 @@ symptom is a ten-second timeout — so the contract is written down here.
 3. `GenFilePaths.ConfigFolderPath` — the fallback, and note this follows
    `-savedatafolder`
 
-**MCP side** — `Repo-MCP/server/src/tools/gameIpc.ts`: `workspaceRoot()\Core`, where
+**MCP side** — `rimworld-claude-dev-tools/server/src/tools/gameIpc.ts`: `workspaceRoot()\Core`, where
 `workspaceRoot()` also honours `RIMSYNAPSE_ROOT`.
 
 They line up because both prefer `RIMSYNAPSE_ROOT`, which the manifest passes to the MCP
