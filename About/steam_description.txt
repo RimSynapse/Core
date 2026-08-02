@@ -30,11 +30,12 @@ The LLM Direct Action Console acts as an AI-powered command center. You simply o
 
 [h2]Roadmap[/h2]
 [list]
-[*] [b]0.6 - Agent and Tool Foundation:[/b] ✅ Delivered in v0.6.0.
-[*] [b]0.7 - Regions and Territories Compatibility:[/b] Basic pass-through alongside Empire Refactored and World Domination. Territories set tax rates; the regular game mechanics are left alone.
-[*] [b]0.8 - Demographics, News and Narrative Voice:[/b] Regional ideology and new map overlays, a newspaper driven by what actually happens on the world map, Aura's own personality, and local text-to-speech.
-[*] [b]0.9 - Factions and Living Societies:[/b] State ideologies, conversion and ideological spread, ideological sites and spies - building toward living NPC societies.
-[*] [b]0.10 - Cross-Mod Capability Passes:[/b] Bringing every module back together for another pass over what the whole set can do.
+[*] [b]0.6 - Agent and Tool Foundation:[/b] ✅ Delivered in v0.6.0 - the background LLM engine, agent loop and game-tool bridge every RimSynapse module builds on.
+[*] [b]0.7 - Regions and Territories Compatibility:[/b] Current release - a load-order guard, a single .NET target so any module can reference any other, and CI release gates, so the territory layer and everything downstream binds cleanly.
+[*] [b]0.8 - Demographics, News and Narrative Voice:[/b] A deferred event pipeline that can hold, narrate and forecast letters and incidents through agentic flows, plus build-hygiene automation (Workshop-page verification, release gates run by tooling rather than by memory).
+[*] [b]0.9 - Factions and Living Societies:[/b] LLM-driven quest generation feeding the faction and world systems.
+[*] [b]0.10 - Cross-Mod Capability Passes:[/b] Coordinating another pass over what the whole set can do together.
+[*] [b]Localization and Hardening:[/b] Externalising every user-facing string so the framework and its modules can be translated.
 [/list]
 These ship when they are ready - no dates.
 
