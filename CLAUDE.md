@@ -211,8 +211,9 @@ a forwarding shim for one release and mark it `[Obsolete]` — see
 
 ## Build and test loop
 
-The harness lives in the `Repo-MCP` repo (`harness/*.ps1`); the in-game suite is the
-`TestRunner` repo (loads last, only active with `-synapse-test`).
+The harness lives in `rimworld-claude-dev-tools` (`harness/*.ps1`; loaded globally via Claude
+settings, local copy at `C:\github\rimworld-claude-dev-tools` — this was forked out of the now-deprecated
+`Repo-MCP`); the in-game suite is the `TestRunner` repo (loads last, only active with `-synapse-test`).
 
 ```powershell
 .\harness\build.ps1              # all mods, dependency order: Core -> Regions -> companions -> Factions
@@ -240,7 +241,7 @@ symptom is a ten-second timeout — so the contract is written down here.
 3. `GenFilePaths.ConfigFolderPath` — the fallback, and note this follows
    `-savedatafolder`
 
-**MCP side** — `Repo-MCP/server/src/tools/gameIpc.ts`: `workspaceRoot()\Core`, where
+**MCP side** — `rimworld-claude-dev-tools/server/src/tools/gameIpc.ts`: `workspaceRoot()\Core`, where
 `workspaceRoot()` also honours `RIMSYNAPSE_ROOT`.
 
 They line up because both prefer `RIMSYNAPSE_ROOT`, which the manifest passes to the MCP
@@ -274,6 +275,20 @@ the path.
   callers must not log error payloads under a `[Result]` prefix.
 - Test output goes through `Log.Message` (never `Log.Error` — it double-counts as a
   blocking entry). Format: `[SYNAPSE-TEST] PASS|FAIL <case> | <detail>`.
+- **`Log.Error` is now classifiable by level.** `Patches/Patch_Log_Error.cs` prefixes
+  every `Verse.Log.Error(string)` with `[SYNAPSE-LOGERROR]`, and `readlog.ps1` keys on
+  that token (Repo-MCP#17) — a `Log.Error` from any mod, in any wording, is caught. Two
+  consequences: (1) the marker exempts `[SYNAPSE-TEST]` output and is idempotent, so keep
+  it that way if you touch `Patch_Log_Error.Mark`; (2) this made previously-invisible
+  errors visible, so a first run after a Core rebuild can surface a real error that older
+  "0 blocking" runs hid — triage it, do not re-hide it in the classifier. It surfaced
+  R&T#46 (183 world-gen `Faction.OfPlayer` calls) on its first outing. Errors logged
+  before `harmony.PatchAll()` are unmarked; the load-order check runs first by design and
+  carries its own token.
+- **Querying `Faction.OfPlayer` when it can be null spams a `Log.Error` each time** —
+  vanilla `FactionManager.OfPlayer` logs "Could not find player faction." on null. Use
+  `Faction.OfPlayerSilentFail` on any path that can run during world generation or before
+  a game exists; `?.` does not help, since the getter logs before the null-conditional.
 - `SynapseLogger.Message(msg, category)` — performance/tier lines use category
   `"performance"` and a `[Tier]`/`[Agent]` prefix.
 

@@ -1,5 +1,5 @@
 [b]Discord Community:[/b] [url=https://discord.gg/eVBebZ2N9s]https://discord.gg/eVBebZ2N9s[/url]
-[b]Version:[/b] v0.7.0 (Target: RimWorld 1.6)
+[b]Version:[/b] v0.7.1 (Target: RimWorld 1.6)
 
 [h1]RimSynapse - Core[/h1]
 [b][url=https://github.com/RimSynapse/Core/wiki]Official Wiki and Documentation[/url][/b]
@@ -30,15 +30,24 @@ The LLM Direct Action Console acts as an AI-powered command center. You simply o
 
 [h2]Roadmap[/h2]
 [list]
-[*] [b]0.6 - Agent and Tool Foundation:[/b] ✅ Delivered in v0.6.0.
-[*] [b]0.7 - Regions and Territories Compatibility:[/b] Basic pass-through alongside Empire Refactored and World Domination. Territories set tax rates; the regular game mechanics are left alone.
-[*] [b]0.8 - Demographics, News and Narrative Voice:[/b] Regional ideology and new map overlays, a newspaper driven by what actually happens on the world map, Aura's own personality, and local text-to-speech.
-[*] [b]0.9 - Factions and Living Societies:[/b] State ideologies, conversion and ideological spread, ideological sites and spies - building toward living NPC societies.
-[*] [b]0.10 - Cross-Mod Capability Passes:[/b] Bringing every module back together for another pass over what the whole set can do.
+[*] [b]0.8 - Demographics, News and Narrative Voice:[/b] A deferred event pipeline that can hold, narrate and forecast letters and incidents through agentic flows, plus build-hygiene automation (Workshop-page verification, release gates run by tooling rather than by memory).
+[*] [b]0.9 - Factions and Living Societies:[/b] LLM-driven quest generation feeding the faction and world systems.
+[*] [b]0.10 - Cross-Mod Capability Passes:[/b] Coordinating another pass over what the whole set can do together.
+[*] [b]Localization and Hardening:[/b] Externalising every user-facing string so the framework and its modules can be translated.
 [/list]
 These ship when they are ready - no dates.
 
 ---
+
+[h2]Changelog (v0.7.1) - Weight-driven memory and evaluation[/h2]
+[list]
+[*] NEW - Memories now live on a single 0-1 importance scale, and short-term vs long-term is emergent: a memory becomes long-term once its relational salience - its links to other significant memories and people - crosses a threshold, not from a hardcoded type list.
+[*] NEW - Relational consolidation: idle chit-chat fades within a day or two, but chit-chat about someone who then dies is pulled up into long-term memory the day the death lands.
+[*] NEW - Data-driven memory classes (MemoryClasses XML): per-type base weight, decay and consolidation are tunable by XPath, no recompile.
+[*] Changed: context now surfaces long-term and high-salience memories first, then fills with recent ones, instead of a flat top-5-by-weight.
+[*] Fixed: reinforcing a strong memory no longer crushed it (a weight-scale bug) - reinforcement now only ever raises a memory.
+[*] Added the trait-pressure data model behind Psychology's gradual, multi-day personality shifts. Old saves migrate silently.
+[/list]
 
 [h2]Changelog (v0.7.0) - Regions and Territories Compatibility[/h2]
 [list]
@@ -46,32 +55,7 @@ These ship when they are ready - no dates.
 [*] Changed: every mod now targets .NET Framework 4.8, so any RimSynapse mod can reference any other. Previously a net472 mod could not, and the reference was dropped with only a build warning.
 [*] Changed: the metadata and wiki release gates now run automatically on every pull request, rather than when someone remembers to run them.
 [/list]
-
----
-
-[h2]Changelog (v0.6.1)[/h2]
-[list]
-[*] [b]FIXED - mod list metadata:[/b] The in-game mod list still showed v0.5.2 with no v0.6.0 notes. Version and changelog now agree everywhere they are stated.
-[*] [b]Roadmap updated:[/b] 0.7 is now Regions and Territories compatibility - the groundwork the Factions work depends on. Everything after it shifts up one release.
-[/list]
-
----
-
-[h2]Changelog (v0.6.0) - Agent and Tool Foundation[/h2]
-[b]The storyteller can now plan and carry out multi-step work on its own - and it is built to stay fast on modest hardware.[/b]
-[list]
-[*] [b]NEW - Multi-step plans that wait on the game:[/b] scripts that call game tools, pause until something is true, see what happened and keep going. They survive saving and loading, resuming at the right step.
-[*] [b]NEW - Run controls:[/b] turn limits, a per-run request budget, a stop button, and an Agent Runs inspector showing what was decided, run, observed and spent.
-[*] [b]NEW - Autonomous actions are gated[/b] behind "Allow autonomous mutations". Your own commands are unaffected.
-[*] [b]NEW - It measures your setup instead of guessing,[/b] scaling to your machine and stepping back down when responses slow. Designed down to a 2k context window, with conversations prioritised and background work yielding to you.
-[*] [b]NEW - Cloud API cost control,[/b] budgeted by token cost.
-[*] [b]FIXED - Silent failures:[/b] a mistyped tool looked like a success and a malformed plan was dropped with nothing in the log.
-[/list]
-[b]Compatibility:[/b] v0.5.x saves load unchanged, and no published code interface was removed - mods built against RimSynapse keep working.
-
----
-
-[b]Older releases:[/b] see the full changelog at [url=https://github.com/RimSynapse/Core/blob/main/CHANGELOG.md]github.com/RimSynapse/Core[/url]
+[b]Full version history:[/b] [url=https://github.com/RimSynapse/Core/wiki/Changelog]github.com/RimSynapse/Core/wiki[/url]
 
 ---
 

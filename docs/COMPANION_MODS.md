@@ -207,3 +207,15 @@ Work lands on `development` via PRs; `main` only via release promotion. Versioni
 ## 10. Publishing your own in-game docs
 
 Any mod that ships a `Learning/` folder of `.md` files gets them injected into RimWorld's Learning Helper automatically at startup — headings, bullets, bold/italic and blockquotes render; code fences and images do not (keep the in-game copies fence-free). Keep a matching copy in your repo so the in-game docs and GitHub never drift — exactly as this document mirrors `Learning/Agent_Scripting_and_Tools.md`.
+
+## 11. Tuning the memory model (0.7.1)
+
+Memory weight is a single **0.0–1.0** scale; short-term vs long-term is emergent (a memory consolidates to long-term once its relational salience or reference count crosses a threshold), not a `memoryType` list. Per-type behaviour is data-driven via `SynapseMemoryClassDef` (`Core/Defs/MemoryClasses/`), so you can retune or add memory classes by XPath without recompiling:
+
+- `memoryType` — the type this class tunes (matched case-insensitively; falls back to sane defaults for unknown types).
+- `baseWeight` — suggested 0–1 weight for a fresh memory of this class.
+- `decayRate` — per-day decay in the daily maintenance pass (before the global `memoryDecayMultiplier`).
+- `bornLongTerm` — true = never decays (backstory, defining events).
+- `consolidationContribution` — how strongly a memory of this class boosts a neighbour's salience (0–1 × its weight), which is what lets, e.g., a death promote linked chit-chat.
+
+When you create memories, populate `subjectPawnIds` with the pawn a memory is *about* so the salience graph can link it. Balance thresholds (consolidation, reference count, decay, trait-shift pressure) are exposed as mod settings and mirrored into Core statics, so players can retune without XML.

@@ -354,12 +354,15 @@ namespace RimSynapse.Internal
                     slots.Add(MakeSlot("memories", $"[Memories] {topBurdens}"));
                     
                     // We also populate packet.sourcePawn.memories for raw data injection
-                    var filteredMemories = targetPawnId != null 
-                        ? coreComp.GetMemoriesByPawnId(targetPawnId) 
+                    var filteredMemories = targetPawnId != null
+                        ? coreComp.GetMemoriesByPawnId(targetPawnId)
                         : coreComp.memories;
-                        
+
+                    // Tier selection: long-term / high-salience first, then recent high-weight short-term
+                    // (design §5.8). Also records the surface as a reference (recency + count).
+                    var selected = coreComp.SelectMemoriesForContext(filteredMemories, 5);
                     var entries = new List<MemoryEntry>();
-                    foreach (var mem in filteredMemories)
+                    foreach (var mem in selected)
                     {
                         entries.Add(new MemoryEntry
                         {
@@ -368,8 +371,7 @@ namespace RimSynapse.Internal
                             memoryType = mem.memoryType
                         });
                     }
-                    entries.Sort((a, b) => b.weight.CompareTo(a.weight));
-                    packet.sourcePawn.memories = entries.Take(5).ToList();
+                    packet.sourcePawn.memories = entries;
                 }
 
                 // Read personality summary natively

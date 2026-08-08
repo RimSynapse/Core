@@ -22,8 +22,35 @@ namespace RimSynapse.Models
         public float decayRate = 0.05f;          // default 0.05
         public int timesReferenced;
 
+        // ── Stage 1 (0.7.1) weight-lifecycle fields — all Scribe-defaulted & back-compat ──
+        /// <summary>Absolute tick this memory was last bumped or surfaced into context; drives recency.</summary>
+        public long lastReferencedTick = 0;
+        /// <summary>Cached relational salience, recomputed in the daily maintenance pass (see comp).</summary>
+        public float salience = 0f;
+        /// <summary>For combat-derived memories: "humanlike" | "animal" | "object" | "self". Null otherwise.</summary>
+        public string targetKind = null;
+        /// <summary>Explicit graph edges. Implicit edges via shared tags/subjectPawnIds remain primary.</summary>
+        public List<string> linkedMemoryIds = new List<string>();
+        /// <summary>Stable id so links survive save/load. Assigned on AddMemory / back-filled on load.</summary>
+        public string memId = null;
+
         public WeightedMemory()
         {
+        }
+
+        /// <summary>
+        /// Deterministically derive a stable id from summary + absTick so back-fill on load produces
+        /// the same id every time (no per-process hash randomisation reliance).
+        /// </summary>
+        public void EnsureMemId()
+        {
+            if (!string.IsNullOrEmpty(memId)) return;
+            int h = 17;
+            if (summary != null)
+            {
+                foreach (char c in summary) h = unchecked(h * 31 + c);
+            }
+            memId = absTick.ToString() + "_" + (h & 0x7fffffff).ToString("x");
         }
 
         public void ExposeData()
@@ -39,12 +66,21 @@ namespace RimSynapse.Models
             Scribe_Values.Look(ref timesReferenced, "timesReferenced", 0);
             Scribe_Values.Look(ref isLongTerm, "isLongTerm", false);
             Scribe_Collections.Look(ref subjectPawnIds, "subjectPawnIds", LookMode.Value);
-            
+
+            // Stage 1 additive fields — absent in old saves ⇒ Scribe default, then initialised in the
+            // comp's PostLoadInit migration (memId, lastReferencedTick) and the daily pass (salience).
+            Scribe_Values.Look(ref lastReferencedTick, "lastReferencedTick", 0L);
+            Scribe_Values.Look(ref salience, "salience", 0f);
+            Scribe_Values.Look(ref targetKind, "targetKind", null);
+            Scribe_Collections.Look(ref linkedMemoryIds, "linkedMemoryIds", LookMode.Value);
+            Scribe_Values.Look(ref memId, "memId", null);
+
             // Ensure lists are initialized after loading
             if (Scribe.mode == LoadSaveMode.LoadingVars)
             {
                 if (tags == null) tags = new List<string>();
                 if (subjectPawnIds == null) subjectPawnIds = new List<string>();
+                if (linkedMemoryIds == null) linkedMemoryIds = new List<string>();
             }
         }
 

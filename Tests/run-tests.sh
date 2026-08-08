@@ -43,6 +43,11 @@ run_suite providers \
     Tests/Stubs.cs Tests/ProviderTests.cs \
     $SRC/SynapseCoreProviders.cs
 
+# The deferred-event pipeline is game-free, so it needs no stubs at all.
+run_suite deferred \
+    Tests/DeferredEventTests.cs \
+    $SRC/SynapseDeferredEventPipeline.cs
+
 echo
 if [ "$failures" -eq 0 ]; then
     echo "ALL SUITES PASSED"

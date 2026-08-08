@@ -21,16 +21,26 @@ error, and simply never answers. The same failure class as an unbound Harmony pa
 | Suite | Covers |
 |---|---|
 | `ProviderTests` | the capability provider registry: documented unregistered values, warn-once, registration logging, throwing-provider containment, reflection registration, and the legacy population-density shim |
+| `DeferredEventTests` | the deferred-event hold state machine: stage ordering, real-seconds timeout, stage-failure containment, invalidation-on-release, concurrent-hold cap, and once-only release |
 
-## The two extension surfaces
+## The three extension surfaces
 
-Core brokers two different kinds of extension, and they are not interchangeable:
+Core brokers three different kinds of extension, and they are not interchangeable — picking the
+wrong one is how a fourth undocumented convention gets invented:
 
 - **Broadcast hooks** — many subscribers, push, no return value. Events on `SynapseCoreContext`
   (`OnInjectGenericContext`, `OnGlobalKnowledgeBroadcast`), `SynapseLetterContextHook` and
   `ContextAssembler`. Use one when several mods may each want to contribute something.
 - **Providers** — exactly one authoritative answerer, pull, returns a value.
   `SynapseCoreProviders`. Use one when a single mod owns a question and others need the answer.
+- **Deferred stages** — many subscribers, **ordered**, each able to **defer** the release of an
+  event until it has finished asynchronous work. `SynapseDeferredEventPipeline` (the game-free state
+  machine) behind `SynapseDeferredEvents` (the Harmony + reflection surface). Neither push nor pull:
+  a stage is handed the event, may hold it, and signals when done; the event is released once every
+  stage completes or the deadline fires, whichever comes first. Use one when a game event must wait
+  for slow work — an LLM letter rewrite, then the spoken audio of the rewritten text — and the
+  waiters are **ordered** because a later one consumes an earlier one's output. Every hold has a
+  real-seconds deadline that always fires, and events not classified as holdable are never held.
 
 The rule behind both: **the mod that introduces a mechanic owns its state and its logic.** Core does
 not store other mods' data; it brokers access to it. A consumer asks Core and gets a documented

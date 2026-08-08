@@ -64,8 +64,12 @@ namespace RimSynapse
                 return;
             }
 
-            // Quicktest mock bypass to avoid slow LLM generation during developer tests
-            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-quicktest") >= 0)
+            // Quicktest mock bypass to avoid slow LLM generation during developer tests.
+            // Exception: -synapse-determination keeps quicktest's auto-generated map/colonists but uses
+            // the REAL model, so the live Determination test tier can run its scenarios.
+            var cmdArgs = System.Environment.GetCommandLineArgs();
+            if (System.Array.IndexOf(cmdArgs, "-quicktest") >= 0
+                && System.Array.IndexOf(cmdArgs, "-synapse-determination") < 0)
             {
                 string mockContent = "{\"success\": true}";
                 string userMsgLower = messages.FindLast(m => m.role == "user")?.content?.ToLower() ?? "";

@@ -171,6 +171,7 @@ namespace RimSynapse
             RegisterObjectStateTools();
             RegisterSearchTools();
             RegisterDefinitionTools();
+            RegisterDebugMemoryTools();
             RegisterDynamicDebugActions();
 
             // Centralized synonym keyword registrations
