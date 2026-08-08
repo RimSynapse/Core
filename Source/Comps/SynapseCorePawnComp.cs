@@ -30,6 +30,9 @@ namespace RimSynapse.Comps
         public List<JobInterval> recentJobs = new List<JobInterval>();
         public string lastJobDefName;
         public int lastJobStartedTick = -1;
+        // Target kind of the currently-running job (combat jobs only); folded into the interval
+        // when the job ends. See ClassifyTargetKind. Null for non-combat / unclassifiable.
+        public string lastJobTargetKind;
         private int locationSampleCooldown = 5;
         /// <summary>
         /// Migration source only. Residency moved to Regions and Territories in 0.7 — it generates
@@ -68,6 +71,7 @@ namespace RimSynapse.Comps
             Scribe_Collections.Look(ref recentJobs, "recentJobs", LookMode.Deep);
             Scribe_Values.Look(ref lastJobDefName, "lastJobDefName");
             Scribe_Values.Look(ref lastJobStartedTick, "lastJobStartedTick", -1);
+            Scribe_Values.Look(ref lastJobTargetKind, "lastJobTargetKind", null);
             Scribe_Values.Look(ref locationSampleCooldown, "locationSampleCooldown", 5);
             Scribe_Values.Look(ref isResident, "isResident", false);
             Scribe_Values.Look(ref lastRecruitmentAttemptTick, "lastRecruitmentAttemptTick", -999999);
@@ -392,6 +396,48 @@ namespace RimSynapse.Comps
             return new List<WeightedMemory>();
         }
 
+        // Combat job defNames whose target we classify (living vs object) so repetitive violence
+        // can be reasoned about correctly — object-bashing must not read as violence against the living.
+        private static readonly HashSet<string> CombatJobDefNames = new HashSet<string>
+        {
+            "AttackMelee", "AttackStatic", "Hunt"
+        };
+
+        public static bool IsCombatJob(string jobDefName)
+        {
+            return jobDefName != null && CombatJobDefNames.Contains(jobDefName);
+        }
+
+        /// <summary>
+        /// Classify what a combat job acted on: "humanlike" | "animal" | "object" | "self",
+        /// or null when the target is invalid/unknown. Mechanoids and other non-living pawns
+        /// classify as "object" — they are constructs, not living creatures, so harming them is
+        /// not evidence of bloodlust toward the living.
+        /// </summary>
+        public static string ClassifyTargetKind(LocalTargetInfo target, Pawn actor)
+        {
+            if (!target.IsValid) return null;
+            Thing t = target.Thing;
+            if (t == null) return null; // a cell target with no thing
+            if (t is Pawn p)
+            {
+                if (p == actor) return "self";
+                if (p.RaceProps != null)
+                {
+                    if (p.RaceProps.Humanlike) return "humanlike";
+                    if (p.RaceProps.Animal) return "animal";
+                }
+                return "object"; // mechanoids / entities: non-living
+            }
+            return "object";
+        }
+
+        private string ClassifyCurrentJobTarget(Pawn pawn, string jobDefName)
+        {
+            if (!IsCombatJob(jobDefName) || pawn.CurJob == null) return null;
+            return ClassifyTargetKind(pawn.CurJob.targetA, pawn);
+        }
+
         private void TrackJobRare(Pawn pawn, int currentTick)
         {
             string currentJobDefName = "idle";
@@ -404,6 +450,7 @@ namespace RimSynapse.Comps
             {
                 lastJobStartedTick = currentTick;
                 lastJobDefName = currentJobDefName;
+                lastJobTargetKind = ClassifyCurrentJobTarget(pawn, currentJobDefName);
                 return;
             }
 
@@ -412,11 +459,13 @@ namespace RimSynapse.Comps
                 int duration = currentTick - lastJobStartedTick;
                 if (duration > 0 && lastJobDefName != null)
                 {
-                    recentJobs.Add(new JobInterval(lastJobDefName, lastJobStartedTick, duration));
+                    recentJobs.Add(new JobInterval(lastJobDefName, lastJobStartedTick, duration, lastJobTargetKind));
                 }
 
                 lastJobDefName = currentJobDefName;
                 lastJobStartedTick = currentTick;
+                // Capture the new job's target now, at its start — targetA is stable for the job's life.
+                lastJobTargetKind = ClassifyCurrentJobTarget(pawn, currentJobDefName);
 
                 // Clean up intervals older than 24 hours (60,000 ticks)
                 recentJobs.RemoveAll(j => (currentTick - (j.startTick + j.durationTicks)) > 60000);
@@ -470,15 +519,32 @@ namespace RimSynapse.Comps
             // Clean up intervals older than 24 hours (60,000 ticks)
             recentJobs.RemoveAll(j => (currentTick - (j.startTick + j.durationTicks)) > 60000);
 
-            // Accumulate durations
+            // Accumulate durations keyed by job def AND target kind, so repetitive violence against
+            // an object groups apart from violence against the living rather than reading as one
+            // undifferentiated "attacking" blob.
             var accumulated = new Dictionary<string, int>();
+            var keyDef = new Dictionary<string, string>();
+            var keyKind = new Dictionary<string, string>();
             int totalDuration = 0;
+
+            void Accumulate(string defName, string targetKind, int ticks)
+            {
+                if (defName == null || ticks <= 0) return;
+                string tk = IsCombatJob(defName) ? targetKind : null;
+                string key = defName + "|" + (tk ?? "");
+                if (!accumulated.ContainsKey(key))
+                {
+                    accumulated[key] = 0;
+                    keyDef[key] = defName;
+                    keyKind[key] = tk;
+                }
+                accumulated[key] += ticks;
+                totalDuration += ticks;
+            }
 
             foreach (var interval in recentJobs)
             {
-                if (!accumulated.ContainsKey(interval.jobDefName)) accumulated[interval.jobDefName] = 0;
-                accumulated[interval.jobDefName] += interval.durationTicks;
-                totalDuration += interval.durationTicks;
+                Accumulate(interval.jobDefName, interval.targetKind, interval.durationTicks);
             }
 
             // Include current job's ongoing duration
@@ -487,9 +553,7 @@ namespace RimSynapse.Comps
                 int ongoingDuration = currentTick - lastJobStartedTick;
                 if (ongoingDuration > 0)
                 {
-                    if (!accumulated.ContainsKey(lastJobDefName)) accumulated[lastJobDefName] = 0;
-                    accumulated[lastJobDefName] += ongoingDuration;
-                    totalDuration += ongoingDuration;
+                    Accumulate(lastJobDefName, lastJobTargetKind, ongoingDuration);
                 }
             }
 
@@ -498,25 +562,40 @@ namespace RimSynapse.Comps
                 return "idle (100%)";
             }
 
-            // Group by human-readable JobDef labels where possible
-            var labelAccumulated = new Dictionary<string, int>();
-            foreach (var kvp in accumulated)
-            {
-                var jobDef = DefDatabase<JobDef>.GetNamed(kvp.Key, false);
-                string label = jobDef?.label ?? kvp.Key;
-                if (!labelAccumulated.ContainsKey(label)) labelAccumulated[label] = 0;
-                labelAccumulated[label] += kvp.Value;
-            }
-
-            var sorted = labelAccumulated.OrderByDescending(kvp => kvp.Value).ToList();
+            var sorted = accumulated.OrderByDescending(kvp => kvp.Value).ToList();
             var parts = new List<string>();
             foreach (var kvp in sorted)
             {
                 float pct = (float)kvp.Value / totalDuration;
-                parts.Add($"{kvp.Key} ({pct.ToStringPercent()})");
+                parts.Add(DescribeJobActivity(keyDef[kvp.Key], keyKind[kvp.Key], pct));
             }
 
             return string.Join(", ", parts);
+        }
+
+        /// <summary>
+        /// Render one accumulated activity group. Combat groups name their target kind, and
+        /// object-only violence is explicitly marked non-lethal so it cannot masquerade as
+        /// bloodthirsty violence against the living.
+        /// </summary>
+        private static string DescribeJobActivity(string jobDefName, string targetKind, float pct)
+        {
+            var jobDef = DefDatabase<JobDef>.GetNamed(jobDefName, false);
+            string label = jobDef?.label ?? jobDefName;
+            string pctStr = pct.ToStringPercent();
+
+            if (IsCombatJob(jobDefName) && targetKind != null)
+            {
+                switch (targetKind)
+                {
+                    case "humanlike": return $"{label} a person ({pctStr})";
+                    case "animal":    return $"{label} an animal ({pctStr})";
+                    case "self":      return $"{label} themselves ({pctStr})";
+                    default:          return $"{label} an inanimate object — non-lethal, not violence against the living ({pctStr})";
+                }
+            }
+
+            return $"{label} ({pctStr})";
         }
     }
 
@@ -529,6 +608,13 @@ namespace RimSynapse.Comps
         public int startTick;
         public int durationTicks;
 
+        /// <summary>
+        /// For combat jobs, the classified kind of what was acted on:
+        /// "humanlike" | "animal" | "object" | "self". Null for non-combat jobs or when
+        /// the target could not be classified (including legacy saves written before this field).
+        /// </summary>
+        public string targetKind;
+
         public JobInterval() {}
 
         public JobInterval(string jobDefName, int startTick, int durationTicks)
@@ -538,11 +624,22 @@ namespace RimSynapse.Comps
             this.durationTicks = durationTicks;
         }
 
+        // Separate overload rather than an optional parameter, to preserve the existing
+        // signature for anything already bound to it (binary-compatibility rule).
+        public JobInterval(string jobDefName, int startTick, int durationTicks, string targetKind)
+        {
+            this.jobDefName = jobDefName;
+            this.startTick = startTick;
+            this.durationTicks = durationTicks;
+            this.targetKind = targetKind;
+        }
+
         public void ExposeData()
         {
             Scribe_Values.Look(ref jobDefName, "jobDefName");
             Scribe_Values.Look(ref startTick, "startTick");
             Scribe_Values.Look(ref durationTicks, "durationTicks");
+            Scribe_Values.Look(ref targetKind, "targetKind", null);
         }
     }
 }
