@@ -2,6 +2,14 @@
 
 Full version history for RimSynapse - Core. The mod page and Workshop description show only the latest release; every earlier version is recorded here.
 
+## v0.7.1 - Weight-driven memory and evaluation
+- NEW - Memories now live on a single 0-1 importance scale, and short-term vs long-term is emergent: a memory becomes long-term once its relational salience - its links to other significant memories and people - crosses a threshold, not from a hardcoded type list.
+- NEW - Relational consolidation: idle chit-chat fades within a day or two, but chit-chat about someone who then dies is pulled up into long-term memory the day the death lands.
+- NEW - Data-driven memory classes (`Defs/MemoryClasses`): per-type base weight, decay and consolidation are tunable by XPath without recompiling.
+- Changed: context now surfaces long-term and high-salience memories first, then fills with recent ones, instead of a flat top-5-by-weight. Surfacing a memory counts as a reference.
+- Fixed: reinforcing a strong memory no longer crushed it down to 1.0 (a weight-scale mismatch); reinforcement now only ever raises a memory.
+- Added the `TraitPressure` data model and per-comp store behind Psychology's gradual, multi-day personality shifts. Legacy saves rescale weights to 0-1 exactly once and migrate silently.
+
 ## v0.7.0 - Regions and Territories Compatibility
 - NEW - Load-order guard: a mod loaded before something it declares it must load after now reports one clear error at startup, instead of silently losing every type in its assembly and appearing installed while doing nothing.
 - Changed: every mod now targets .NET Framework 4.8, so any RimSynapse mod can reference any other. Previously a net472 mod could not, and the reference was dropped with only a build warning.

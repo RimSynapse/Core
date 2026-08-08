@@ -1,5 +1,5 @@
 [b]Discord Community:[/b] [url=https://discord.gg/eVBebZ2N9s]https://discord.gg/eVBebZ2N9s[/url]
-[b]Version:[/b] v0.7.0 (Target: RimWorld 1.6)
+[b]Version:[/b] v0.7.1 (Target: RimWorld 1.6)
 
 [h1]RimSynapse - Core[/h1]
 [b][url=https://github.com/RimSynapse/Core/wiki]Official Wiki and Documentation[/url][/b]
@@ -38,6 +38,16 @@ The LLM Direct Action Console acts as an AI-powered command center. You simply o
 These ship when they are ready - no dates.
 
 ---
+
+[h2]Changelog (v0.7.1) - Weight-driven memory and evaluation[/h2]
+[list]
+[*] NEW - Memories now live on a single 0-1 importance scale, and short-term vs long-term is emergent: a memory becomes long-term once its relational salience - its links to other significant memories and people - crosses a threshold, not from a hardcoded type list.
+[*] NEW - Relational consolidation: idle chit-chat fades within a day or two, but chit-chat about someone who then dies is pulled up into long-term memory the day the death lands.
+[*] NEW - Data-driven memory classes (MemoryClasses XML): per-type base weight, decay and consolidation are tunable by XPath, no recompile.
+[*] Changed: context now surfaces long-term and high-salience memories first, then fills with recent ones, instead of a flat top-5-by-weight.
+[*] Fixed: reinforcing a strong memory no longer crushed it (a weight-scale bug) - reinforcement now only ever raises a memory.
+[*] Added the trait-pressure data model behind Psychology's gradual, multi-day personality shifts. Old saves migrate silently.
+[/list]
 
 [h2]Changelog (v0.7.0) - Regions and Territories Compatibility[/h2]
 [list]

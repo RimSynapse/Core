@@ -4,7 +4,7 @@
     <author>RimSynapse Team</author>
     <packageId>RimSynapse.Core</packageId>
     <url>https://github.com/RimSynapse/Core</url>
-    <modVersion>0.7.0</modVersion>
+    <modVersion>0.7.1</modVersion>
     <supportedVersions>
         <li>1.5</li>
         <li>1.6</li>
@@ -30,7 +30,7 @@
     </incompatibleWith>
     <description>
 Discord Community: https://discord.gg/eVBebZ2N9s
-Version: v0.7.0 (Target: RimWorld 1.6)
+Version: v0.7.1 (Target: RimWorld 1.6)
 
 RimSynapse - Core
 Official Wiki and Documentation: https://github.com/RimSynapse/Core/wiki
@@ -62,6 +62,14 @@ AI is incredibly cool, and having a framework to utilize powerful, no-cost local
 0.10 - Cross-Mod Capability Passes: Coordinating another pass over what the whole set can do together.
 Localization and Hardening: Externalising every user-facing string so the framework and its modules can be translated.
 These ship when they are ready - no dates.
+
+--- Changelog (v0.7.1) - Weight-driven memory and evaluation ---
+- NEW - Memories now live on a single 0-1 importance scale, and short-term vs long-term is emergent: a memory becomes long-term once its relational salience - its links to other significant memories and people - crosses a threshold, not from a hardcoded type list.
+- NEW - Relational consolidation: idle chit-chat fades within a day or two, but chit-chat about someone who then dies is pulled up into long-term memory the day the death lands.
+- NEW - Data-driven memory classes (MemoryClasses XML): per-type base weight, decay and consolidation are tunable by XPath, no recompile.
+- Changed: context now surfaces long-term and high-salience memories first, then fills with recent ones, instead of a flat top-5-by-weight.
+- Fixed: reinforcing a strong memory no longer crushed it (a weight-scale bug) - reinforcement now only ever raises a memory.
+- Added the trait-pressure data model behind Psychology's gradual, multi-day personality shifts. Old saves migrate silently.
 
 --- Changelog (v0.7.0) - Regions and Territories Compatibility ---
 - NEW - Load-order guard: a mod loaded before something it declares it must load after now reports one clear error at startup, instead of silently losing every type in its assembly and appearing installed while doing nothing.
