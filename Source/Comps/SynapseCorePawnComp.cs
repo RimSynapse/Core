@@ -25,6 +25,10 @@ namespace RimSynapse.Comps
         public Dictionary<string, float> thoughtSensitivities = new Dictionary<string, float>();
         public Dictionary<string, float> relationSensitivities = new Dictionary<string, float>();
 
+        // Per-candidate-trait accumulated evidence toward/away from a personality shift (Stage 2, #79).
+        // Core owns the persisted data; Psychology folds evidence in and reads the threshold.
+        public Dictionary<string, TraitPressure> traitPressures = new Dictionary<string, TraitPressure>();
+
         // Grounding history tracking fields
         public List<string> recentLocations = new List<string>();
         public List<JobInterval> recentJobs = new List<JobInterval>();
@@ -81,6 +85,7 @@ namespace RimSynapse.Comps
             
             Scribe_Collections.Look(ref thoughtSensitivities, "thoughtSensitivities", LookMode.Value, LookMode.Value);
             Scribe_Collections.Look(ref relationSensitivities, "relationSensitivities", LookMode.Value, LookMode.Value);
+            Scribe_Collections.Look(ref traitPressures, "traitPressures", LookMode.Value, LookMode.Deep);
             
             Scribe_Collections.Look(ref recentLocations, "recentLocations", LookMode.Value);
             Scribe_Collections.Look(ref recentJobs, "recentJobs", LookMode.Deep);
@@ -102,6 +107,7 @@ namespace RimSynapse.Comps
                 if (llmTraits == null) llmTraits = new List<string>();
                 if (thoughtSensitivities == null) thoughtSensitivities = new Dictionary<string, float>();
                 if (relationSensitivities == null) relationSensitivities = new Dictionary<string, float>();
+                if (traitPressures == null) traitPressures = new Dictionary<string, TraitPressure>();
                 if (recentLocations == null) recentLocations = new List<string>();
                 if (recentJobs == null) recentJobs = new List<JobInterval>();
             }
@@ -214,6 +220,62 @@ namespace RimSynapse.Comps
 
         private static float Clamp01(float v) => v < 0f ? 0f : (v > 1f ? 1f : v);
 
+        // ── Trait pressure (Stage 2, #79) — data + helpers; Psychology owns the threshold logic ──
+        private const int TicksPerDayF = 60000;
+
+        /// <summary>
+        /// Fold a day's evidence into a trait's accumulated pressure (design §5.7): decay the existing
+        /// entry toward 0 by elapsed days first, then add <c>dailyPressure × (1 − resistanceFactor)</c>.
+        /// Returns the new accumulated pressure.
+        /// </summary>
+        public float AccumulateTraitPressure(string trait, float dailyPressure, string direction,
+            float resistanceFactor, long nowTick, float pressureDecayPerDay = 0.2f)
+        {
+            if (string.IsNullOrEmpty(trait)) return 0f;
+            if (!traitPressures.TryGetValue(trait, out var tp))
+            {
+                tp = new TraitPressure();
+                traitPressures[trait] = tp;
+            }
+            if (tp.lastUpdatedTick > 0)
+            {
+                float days = System.Math.Max(0f, (nowTick - tp.lastUpdatedTick) / (float)TicksPerDayF);
+                tp.pressure = System.Math.Max(0f, tp.pressure - pressureDecayPerDay * days);
+            }
+            tp.pressure += dailyPressure * (1f - Clamp01(resistanceFactor));
+            tp.direction = direction;
+            tp.lastUpdatedTick = nowTick;
+            if (tp.pressure > tp.peak) tp.peak = tp.pressure;
+            return tp.pressure;
+        }
+
+        public bool TryGetTraitPressure(string trait, out TraitPressure tp) => traitPressures.TryGetValue(trait, out tp);
+
+        /// <summary>Clear a trait's accumulated pressure (call after a change actually fires).</summary>
+        public void ResetTraitPressure(string trait)
+        {
+            if (trait != null) traitPressures.Remove(trait);
+        }
+
+        /// <summary>
+        /// Decay every trait pressure toward 0 by elapsed days and drop entries that reach ~0, so a
+        /// single bad day does not linger. Called from the daily maintenance pass.
+        /// </summary>
+        public void DecayTraitPressuresToZero(long nowTick, float pressureDecayPerDay = 0.2f)
+        {
+            if (traitPressures.Count == 0) return;
+            var stale = new List<string>();
+            foreach (var kvp in traitPressures)
+            {
+                var tp = kvp.Value;
+                float days = tp.lastUpdatedTick > 0 ? System.Math.Max(0f, (nowTick - tp.lastUpdatedTick) / (float)TicksPerDayF) : 0f;
+                tp.pressure = System.Math.Max(0f, tp.pressure - pressureDecayPerDay * days);
+                tp.lastUpdatedTick = nowTick;
+                if (tp.pressure <= 0.001f) stale.Add(kvp.Key);
+            }
+            foreach (var k in stale) traitPressures.Remove(k);
+        }
+
         /// <summary>
         /// One-shot legacy weight rescale (design §8). Old saves stored weights on a 0.1–5.0 scale;
         /// the canonical scale is now 0–1. Runs exactly once per comp, guarded by memoryScaleVersion.
@@ -253,6 +315,10 @@ namespace RimSynapse.Comps
 
             RecomputeSalienceAndConsolidate();
             DoMemoryDecay();
+
+            // Trait pressures ebb toward 0 on days without fresh evidence (design §4.2/§5.7).
+            long now = Find.TickManager != null ? Find.TickManager.TicksAbs : 0L;
+            DecayTraitPressuresToZero(now);
         }
 
         private void DoMemoryDecay()
