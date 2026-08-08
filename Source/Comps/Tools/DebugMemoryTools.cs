@@ -54,6 +54,21 @@ namespace RimSynapse
                     required = new[] { "pawnName" }
                 },
                 DebugRunMaintenanceHandler, false, null, true);
+
+            RegisterTool(
+                "debug_judge",
+                "DEBUG: ask the LLM to judge an OUTPUT against CRITERIA; the verdict (pass/score/reasoning) is logged as [SYNAPSE-DEBUG]. A reusable evaluation mechanism, separate from the gameplay tests' assertions.",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        output = new { type = "string", description = "The output/decision to evaluate" },
+                        criteria = new { type = "string", description = "What the output should satisfy" }
+                    },
+                    required = new[] { "output", "criteria" }
+                },
+                DebugJudgeHandler, false, null, true);
         }
 
         private static Dictionary<string, object> ParseArgs(string args)
@@ -98,6 +113,23 @@ namespace RimSynapse
             var pawn = SynapseCoreDebug.FindPawn(ParseArgs(args).TryGetValue("pawnName", out var pn) ? pn?.ToString() : null);
             if (pawn == null) return "{\"error\": \"pawn not found\"}";
             return JsonConvert.SerializeObject(new { ok = true, result = SynapseCoreDebug.RunMaintenance(pawn) });
+        }
+
+        private static string DebugJudgeHandler(string args)
+        {
+            try
+            {
+                var d = ParseArgs(args);
+                string output = d.TryGetValue("output", out var o) ? o?.ToString() : null;
+                string criteria = d.TryGetValue("criteria", out var c) ? c?.ToString() : null;
+                if (string.IsNullOrEmpty(output) || string.IsNullOrEmpty(criteria))
+                    return "{\"error\": \"output and criteria are required\"}";
+                SynapseLlmJudge.Judge(output, criteria, v =>
+                    SynapseLogger.Info("core", $"[SYNAPSE-DEBUG] Judge verdict: pass={v.pass} score={v.score:0.00} valid={v.valid} :: {v.reasoning}"),
+                    "Debug Judge");
+                return "{\"status\": \"queued\", \"note\": \"verdict logged as [SYNAPSE-DEBUG]\"}";
+            }
+            catch (Exception ex) { return JsonConvert.SerializeObject(new { error = ex.Message }); }
         }
     }
 }
