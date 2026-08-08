@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  RimSynapse Core — Default Memory Classes (0.7.1)
+
+  Per-memoryType tuning for the weight lifecycle. The canonical weight scale is 0.0-1.0.
+    baseWeight                 suggested weight for a freshly created memory of this class
+    decayRate                  per-day decay in the daily maintenance pass (before the global multiplier)
+    bornLongTerm               true = never decays, long-term from creation (backstory, defining events)
+    consolidationContribution  how strongly this memory boosts a neighbour's salience (0-1 x its weight)
+
+  Unknown memoryTypes fall back to sane defaults (baseWeight 0.3, decay 0.1, contribution 0.5).
+  Modders/players: override any value by XPath, or add a new SynapseMemoryClassDef for a new type.
+-->
+<Defs>
+
+  <!-- Idle chit-chat: decays out within ~2 days UNLESS relational salience (a linked significant
+       event) promotes it. Low self-contribution so trivial banter doesn't inflate neighbours. -->
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_Social</defName>
+    <memoryType>social</memoryType>
+    <baseWeight>0.1</baseWeight>
+    <decayRate>0.5</decayRate>
+    <bornLongTerm>false</bornLongTerm>
+    <consolidationContribution>0.2</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
+  <!-- Daily evaluative reflections on significant events. Meaningful, moderate persistence, and a
+       strong neighbour contribution (a death reflection should be able to promote linked chatter). -->
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_EventReflection</defName>
+    <memoryType>EventReflection</memoryType>
+    <baseWeight>0.4</baseWeight>
+    <decayRate>0.15</decayRate>
+    <bornLongTerm>false</bornLongTerm>
+    <consolidationContribution>1.0</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
+  <!-- First impression on arrival: fades slowly but is not permanent. -->
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_Arrival</defName>
+    <memoryType>Arrival</memoryType>
+    <baseWeight>0.5</baseWeight>
+    <decayRate>0.05</decayRate>
+    <bornLongTerm>false</bornLongTerm>
+    <consolidationContribution>0.6</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
+  <!-- Backstory: defining, permanent identity. Born long-term (never decays). -->
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_BackstoryChildhood</defName>
+    <memoryType>BackstoryChildhood</memoryType>
+    <baseWeight>0.8</baseWeight>
+    <decayRate>0</decayRate>
+    <bornLongTerm>true</bornLongTerm>
+    <consolidationContribution>0.8</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_BackstoryAdulthood</defName>
+    <memoryType>BackstoryAdulthood</memoryType>
+    <baseWeight>0.8</baseWeight>
+    <decayRate>0</decayRate>
+    <bornLongTerm>true</bornLongTerm>
+    <consolidationContribution>0.8</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
+  <!-- Trait shift / desensitization timeline markers: defining life events, permanent. -->
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_TraitLost</defName>
+    <memoryType>TraitLost</memoryType>
+    <baseWeight>1.0</baseWeight>
+    <decayRate>0</decayRate>
+    <bornLongTerm>true</bornLongTerm>
+    <consolidationContribution>1.0</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
+</Defs>
