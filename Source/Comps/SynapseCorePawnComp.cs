@@ -68,9 +68,11 @@ namespace RimSynapse.Comps
         /// "Memory Decay Speed" setting into this static (Psychology→Core is the allowed direction).</summary>
         public static float MemoryDecayMultiplier = 1.0f;
 
-        // Consolidation thresholds — Stage 3 surfaces these as settings; constants for now.
-        private const float ConsolidationThreshold = 1.0f;
-        private const int ReferenceThreshold = 3;
+        // Consolidation / pressure knobs — Core owns the data; Psychology mirrors its settings into
+        // these statics (Psychology→Core is the allowed direction). Defaults preserve prior behavior.
+        public static float ConsolidationThreshold = 1.0f;
+        public static int ReferenceThreshold = 3;
+        public static float TraitPressureDecayPerDay = 0.2f;
 
         public override void PostExposeData()
         {
@@ -318,7 +320,7 @@ namespace RimSynapse.Comps
 
             // Trait pressures ebb toward 0 on days without fresh evidence (design §4.2/§5.7).
             long now = Find.TickManager != null ? Find.TickManager.TicksAbs : 0L;
-            DecayTraitPressuresToZero(now);
+            DecayTraitPressuresToZero(now, TraitPressureDecayPerDay);
         }
 
         private void DoMemoryDecay()
