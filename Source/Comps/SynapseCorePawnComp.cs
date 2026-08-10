@@ -20,7 +20,16 @@ namespace RimSynapse.Comps
         public string clinicalAssessment;
         public string hometown;
         public List<string> llmTraits = new List<string>();
-        
+
+        // Voice (Conversations#33): Psychology authors these; Conversations consumes voiceProfile now,
+        // the 0.10+ Kokoro TTS layer consumes the kokoro* fields. See Models/KokoroVoices.cs.
+        public string voiceProfile;              // prose speaking-style directive (how they talk)
+        public string kokoroVoice;               // base Kokoro voice id, RNG by sex/gender at birth
+        public float kokoroSpeed = 1f;           // personality pace -> Kokoro speed (~0.8..1.3)
+        public string kokoroBlendVoice;          // optional secondary voice to blend toward (timbre)
+        public float kokoroBlendWeight = 0f;     // blend weight 0..1 (0 = no blend)
+        public bool voiceGenerated = false;      // guard: derive/backfill runs once
+
         // Active AI-driven modifiers shared across mods
         public Dictionary<string, float> thoughtSensitivities = new Dictionary<string, float>();
         public Dictionary<string, float> relationSensitivities = new Dictionary<string, float>();
@@ -84,7 +93,14 @@ namespace RimSynapse.Comps
             Scribe_Values.Look(ref clinicalAssessment, "clinicalAssessment");
             Scribe_Values.Look(ref hometown, "hometown");
             Scribe_Collections.Look(ref llmTraits, "llmTraits", LookMode.Value);
-            
+
+            Scribe_Values.Look(ref voiceProfile, "voiceProfile");
+            Scribe_Values.Look(ref kokoroVoice, "kokoroVoice");
+            Scribe_Values.Look(ref kokoroSpeed, "kokoroSpeed", 1f);
+            Scribe_Values.Look(ref kokoroBlendVoice, "kokoroBlendVoice");
+            Scribe_Values.Look(ref kokoroBlendWeight, "kokoroBlendWeight", 0f);
+            Scribe_Values.Look(ref voiceGenerated, "voiceGenerated", false);
+
             Scribe_Collections.Look(ref thoughtSensitivities, "thoughtSensitivities", LookMode.Value, LookMode.Value);
             Scribe_Collections.Look(ref relationSensitivities, "relationSensitivities", LookMode.Value, LookMode.Value);
             Scribe_Collections.Look(ref traitPressures, "traitPressures", LookMode.Value, LookMode.Deep);
