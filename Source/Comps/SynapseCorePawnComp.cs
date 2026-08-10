@@ -1045,26 +1045,17 @@ namespace RimSynapse.Comps
             return ComputeBaselinePersonality();
         }
 
-        /// <summary>The no-LLM baseline: vanilla childhood/adulthood backstory narrative + the pawn's traits.</summary>
+        /// <summary>
+        /// The no-LLM baseline: the pawn's adult backstory narrative — that IS their settled-identity prose.
+        /// Falls back to the childhood narrative only for pawns too young to have an adulthood (traits are
+        /// fed to consumers separately, so they aren't repeated here).
+        /// </summary>
         public string ComputeBaselinePersonality()
         {
             var pawn = parent as Pawn;
             if (pawn?.story == null) return null;
-            var parts = new List<string>();
-            string child = BackstoryNarrative(pawn.story.Childhood, pawn);
-            string adult = BackstoryNarrative(pawn.story.Adulthood, pawn);
-            if (!string.IsNullOrEmpty(child)) parts.Add(child);
-            if (!string.IsNullOrEmpty(adult)) parts.Add(adult);
-            var traits = pawn.story.traits?.allTraits;
-            if (traits != null && traits.Count > 0)
-            {
-                // Exclude the ecosystem's transient trait markers (aversion/strike/incapable) — those are
-                // temporary mechanics, not settled character.
-                var labels = traits.Where(t => t.def == null || !t.def.defName.StartsWith("Synapse_"))
-                                   .Select(t => t.Label).ToList();
-                if (labels.Count > 0) parts.Add("Traits: " + string.Join(", ", labels) + ".");
-            }
-            return parts.Count > 0 ? string.Join(" ", parts) : null;
+            return BackstoryNarrative(pawn.story.Adulthood, pawn)
+                ?? BackstoryNarrative(pawn.story.Childhood, pawn);
         }
 
         private static string BackstoryNarrative(RimWorld.BackstoryDef b, Pawn pawn)
