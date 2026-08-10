@@ -1034,6 +1034,54 @@ namespace RimSynapse.Comps
         }
 
         /// <summary>
+        /// The personality prose consumers (Conversations, the trait-engine judge, tools) should read: the
+        /// LLM-synthesised summary when a producer (Psychology) has filled it, else a deterministic baseline
+        /// assembled from the pawn's own vanilla data. So a game WITHOUT Psychology still gets grounded
+        /// character prose — no RNG, no empty context. Psychology enriches; it never gates.
+        /// </summary>
+        public string EffectivePersonalitySummary()
+        {
+            if (!string.IsNullOrWhiteSpace(personalitySummary)) return personalitySummary;
+            return ComputeBaselinePersonality();
+        }
+
+        /// <summary>The no-LLM baseline: vanilla childhood/adulthood backstory narrative + the pawn's traits.</summary>
+        public string ComputeBaselinePersonality()
+        {
+            var pawn = parent as Pawn;
+            if (pawn?.story == null) return null;
+            var parts = new List<string>();
+            string child = BackstoryNarrative(pawn.story.Childhood, pawn);
+            string adult = BackstoryNarrative(pawn.story.Adulthood, pawn);
+            if (!string.IsNullOrEmpty(child)) parts.Add(child);
+            if (!string.IsNullOrEmpty(adult)) parts.Add(adult);
+            var traits = pawn.story.traits?.allTraits;
+            if (traits != null && traits.Count > 0)
+            {
+                // Exclude the ecosystem's transient trait markers (aversion/strike/incapable) — those are
+                // temporary mechanics, not settled character.
+                var labels = traits.Where(t => t.def == null || !t.def.defName.StartsWith("Synapse_"))
+                                   .Select(t => t.Label).ToList();
+                if (labels.Count > 0) parts.Add("Traits: " + string.Join(", ", labels) + ".");
+            }
+            return parts.Count > 0 ? string.Join(" ", parts) : null;
+        }
+
+        private static string BackstoryNarrative(RimWorld.BackstoryDef b, Pawn pawn)
+        {
+            if (b == null) return null;
+            string full = b.FullDescriptionFor(pawn).Resolve();
+            if (string.IsNullOrEmpty(full)) return null;
+            // Strip rich-text tags (e.g. <color=...>name</color>) so the prose is clean for the LLM/consumers.
+            full = System.Text.RegularExpressions.Regex.Replace(full, "<[^>]+>", "");
+            // Drop the appended skill/work-modifier block — cut at the first "Skill: +N" token (the disabled
+            // lines follow the skill gains, so this removes them too). Keep just the narrative paragraph.
+            var m = System.Text.RegularExpressions.Regex.Match(full, @"[A-Za-z]+:\s*[+\-]\d");
+            if (m.Success && m.Index > 0) full = full.Substring(0, m.Index);
+            return System.Text.RegularExpressions.Regex.Replace(full, @"\s+", " ").Trim();
+        }
+
+        /// <summary>
         /// Render one accumulated activity group. Combat groups name their target kind, and
         /// object-only violence is explicitly marked non-lethal so it cannot masquerade as
         /// bloodthirsty violence against the living.

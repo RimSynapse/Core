@@ -374,11 +374,13 @@ namespace RimSynapse.Internal
                     packet.sourcePawn.memories = entries;
                 }
 
-                // Read personality summary natively
-                if (!string.IsNullOrEmpty(coreComp.personalitySummary))
+                // Read personality summary natively — LLM prose if a producer filled it, else the Core
+                // deterministic baseline (backstory + traits), so consumers work without Psychology too.
+                string personality = coreComp.EffectivePersonalitySummary();
+                if (!string.IsNullOrEmpty(personality))
                 {
-                    packet.sourcePawn.personalitySummary = coreComp.personalitySummary;
-                    slots.Add(MakeSlot("personalitySummary", $"[Personality] {coreComp.personalitySummary}"));
+                    packet.sourcePawn.personalitySummary = personality;
+                    slots.Add(MakeSlot("personalitySummary", $"[Personality] {personality}"));
                 }
             }
             catch (Exception ex)
