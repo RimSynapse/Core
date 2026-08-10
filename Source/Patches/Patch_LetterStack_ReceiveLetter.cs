@@ -117,7 +117,10 @@ You MUST respond strictly in valid JSON:
                 systemPrompt += "\n---\nAdditional Tone and Faction Context Guidelines:\n" + additionalContext;
             }
 
+            string worldContext = BuildColonyWorldContext();
             string userMessage = $"Vanilla Title: {originalTitle}\nVanilla Text: {originalText}\nRewrite this event.";
+            if (!string.IsNullOrEmpty(worldContext))
+                userMessage += $"\n\nGround it in the real world where natural — {worldContext}";
 
             SynapseClient.PromptAsync(
                 RimSynapseMod.ModHandle,
@@ -260,6 +263,31 @@ Examples:
             {
                 SynapseLogger.Warning($"Failed to trigger storyteller audio comment: {ex.Message}");
             }
+        }
+
+        /// <summary>Compact colony + neighbouring-faction context so generated letters reference the real
+        /// world (colony name, population, known factions and how they feel about you) instead of reading
+        /// as generic filler (#62). Faction.OfPlayerSilentFail avoids a null-faction Log.Error.</summary>
+        private static string BuildColonyWorldContext()
+        {
+            try
+            {
+                var player = Faction.OfPlayerSilentFail;
+                if (player == null) return "";
+
+                string colony = $"the colony {player.Name}";
+                var homeMap = Find.AnyPlayerHomeMap;
+                if (homeMap != null) colony += $" ({homeMap.mapPawns.FreeColonistsCount} colonists)";
+
+                var facs = Find.FactionManager?.AllFactionsVisible?
+                    .Where(f => f != player && !f.IsPlayer && !f.Hidden && !f.defeated && f.def != null && f.def.humanlikeFaction)
+                    .Take(6)
+                    .Select(f => $"{f.Name} ({f.RelationKindWith(player)})")
+                    .ToList();
+                string factions = (facs != null && facs.Count > 0) ? "; nearby factions: " + string.Join(", ", facs) : "";
+                return colony + factions + ".";
+            }
+            catch { return ""; }
         }
     }
 }
