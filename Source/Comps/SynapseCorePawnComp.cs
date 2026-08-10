@@ -38,6 +38,17 @@ namespace RimSynapse.Comps
         // Core owns the persisted data; Psychology folds evidence in and reads the threshold.
         public Dictionary<string, TraitPressure> traitPressures = new Dictionary<string, TraitPressure>();
 
+        // Once-a-day skill snapshot for the skill-driven trait engine — the prior day's Level and
+        // xpSinceLastLevel per skill, so rust (an expert skill declining from disuse) is detectable as a
+        // delta without a per-tick patch. Refreshed by UpdateAndGetRustedSkills at the rest edge.
+        public Dictionary<string, int> skillLevelSnapshot = new Dictionary<string, int>();
+        public Dictionary<string, float> skillXpSinceLevelSnapshot = new Dictionary<string, float>();
+        public long lastSkillSnapshotTick = 0L;
+
+        // Rolling mood baseline (EMA of daily average mood) for the reinforcement dimension of the trait
+        // engine — a trait needs the behaviour AND a positive mood response to it. -1 = uninitialised.
+        public float moodBaseline = -1f;
+
         // Grounding history tracking fields
         public List<string> recentLocations = new List<string>();
         public List<JobInterval> recentJobs = new List<JobInterval>();
@@ -73,6 +84,11 @@ namespace RimSynapse.Comps
         private const int CurrentMemoryScaleVersion = 1;
         private const float LegacyMaxWeightTier = 5.0f; // old scale ceiling; legacy weights divide by this
 
+        /// <summary>One-shot guard for the trait-pressure key migration. 0 = pre-skill-engine (keys were
+        /// bare trait defNames); bumped after rewriting them to candidate-id form ("{axisId}#{degree}").</summary>
+        private int traitPressureKeyVersion = 0;
+        private const int CurrentTraitPressureKeyVersion = 1;
+
         /// <summary>Global decay-speed multiplier. Owned here (Core owns memory); Psychology mirrors its
         /// "Memory Decay Speed" setting into this static (Psychology→Core is the allowed direction).</summary>
         public static float MemoryDecayMultiplier = 1.0f;
@@ -104,6 +120,10 @@ namespace RimSynapse.Comps
             Scribe_Collections.Look(ref thoughtSensitivities, "thoughtSensitivities", LookMode.Value, LookMode.Value);
             Scribe_Collections.Look(ref relationSensitivities, "relationSensitivities", LookMode.Value, LookMode.Value);
             Scribe_Collections.Look(ref traitPressures, "traitPressures", LookMode.Value, LookMode.Deep);
+            Scribe_Collections.Look(ref skillLevelSnapshot, "skillLevelSnapshot", LookMode.Value, LookMode.Value);
+            Scribe_Collections.Look(ref skillXpSinceLevelSnapshot, "skillXpSinceLevelSnapshot", LookMode.Value, LookMode.Value);
+            Scribe_Values.Look(ref lastSkillSnapshotTick, "lastSkillSnapshotTick", 0L);
+            Scribe_Values.Look(ref moodBaseline, "moodBaseline", -1f);
             
             Scribe_Collections.Look(ref recentLocations, "recentLocations", LookMode.Value);
             Scribe_Collections.Look(ref recentJobs, "recentJobs", LookMode.Deep);
@@ -117,6 +137,7 @@ namespace RimSynapse.Comps
             Scribe_Values.Look(ref lastDecayTick, "lastDecayTick", -1);
             Scribe_Values.Look(ref lastOpinionTick, "lastOpinionTick", -1);
             Scribe_Values.Look(ref memoryScaleVersion, "memoryScaleVersion", 0);
+            Scribe_Values.Look(ref traitPressureKeyVersion, "traitPressureKeyVersion", 0);
             
             if (Scribe.mode == LoadSaveMode.LoadingVars)
             {
@@ -126,6 +147,8 @@ namespace RimSynapse.Comps
                 if (thoughtSensitivities == null) thoughtSensitivities = new Dictionary<string, float>();
                 if (relationSensitivities == null) relationSensitivities = new Dictionary<string, float>();
                 if (traitPressures == null) traitPressures = new Dictionary<string, TraitPressure>();
+                if (skillLevelSnapshot == null) skillLevelSnapshot = new Dictionary<string, int>();
+                if (skillXpSinceLevelSnapshot == null) skillXpSinceLevelSnapshot = new Dictionary<string, float>();
                 if (recentLocations == null) recentLocations = new List<string>();
                 if (recentJobs == null) recentJobs = new List<JobInterval>();
             }
@@ -138,6 +161,7 @@ namespace RimSynapse.Comps
                     memory.MigrateTickIfNeeded();
                 }
                 MigrateMemoryScaleIfNeeded();
+                MigrateTraitPressureKeysIfNeeded();
                 foreach (var memory in memories)
                 {
                     memory.EnsureMemId();
@@ -262,6 +286,13 @@ namespace RimSynapse.Comps
             }
             tp.pressure += dailyPressure * (1f - Clamp01(resistanceFactor));
             tp.direction = direction;
+            // Stamp the axis/degree from the candidate-id key (e.g. "NaturalMood#-1" or "Bloodlust#+"),
+            // so readers can render "toward Pessimist" without re-parsing. No signature change.
+            if (RimSynapse.Models.TraitAxis.TryParse(trait, out var axisId, out var targetDegree, out _))
+            {
+                tp.axisId = axisId;
+                tp.targetDegree = targetDegree;
+            }
             tp.lastUpdatedTick = nowTick;
             if (tp.pressure > tp.peak) tp.peak = tp.pressure;
             return tp.pressure;
@@ -317,6 +348,34 @@ namespace RimSynapse.Comps
                 SynapseLogger.Message($"[RimSynapse] Migrated {memories.Count} memories from legacy weight scale (÷{LegacyMaxWeightTier}).", "performance");
             }
             memoryScaleVersion = CurrentMemoryScaleVersion;
+        }
+
+        /// <summary>
+        /// One-shot rewrite of legacy trait-pressure keys. The old (largely inert) whitelist system keyed
+        /// pressure by bare trait defName ("Bloodlust"); the skill engine keys by candidate id
+        /// ("Bloodlust#+", "NaturalMood#-1"). Old entries were all single-trait add/remove, so we resolve
+        /// the new key from the stored <see cref="TraitPressure.direction"/>. Runs once, guarded by version.
+        /// </summary>
+        private void MigrateTraitPressureKeysIfNeeded()
+        {
+            if (traitPressureKeyVersion >= CurrentTraitPressureKeyVersion) return;
+            if (traitPressures != null && traitPressures.Count > 0)
+            {
+                var rekeyed = new Dictionary<string, TraitPressure>();
+                foreach (var kvp in traitPressures)
+                {
+                    string key = kvp.Key;
+                    if (key != null && key.IndexOf('#') < 0)
+                    {
+                        bool add = !string.Equals(kvp.Value?.direction, "remove", System.StringComparison.OrdinalIgnoreCase);
+                        key = RimSynapse.Models.TraitAxis.SingleCandidate(key, add);
+                    }
+                    rekeyed[key] = kvp.Value; // last-writer-wins on the rare collision
+                }
+                traitPressures = rekeyed;
+                SynapseLogger.Message($"[RimSynapse] Migrated {rekeyed.Count} trait-pressure keys to candidate-id form.", "performance");
+            }
+            traitPressureKeyVersion = CurrentTraitPressureKeyVersion;
         }
 
         /// <summary>
@@ -845,6 +904,133 @@ namespace RimSynapse.Comps
             }
 
             return string.Join(", ", parts);
+        }
+
+        /// <summary>
+        /// Numeric activity facts over the rolling 24h job window, for the skill-driven trait engine.
+        /// <paramref name="idleFraction"/> is the share of recorded time spent idle (0..1);
+        /// <paramref name="livingViolenceFraction"/> is the share spent in combat against a living target
+        /// (humanlike or animal — object/mechanoid bashing is excluded). Raw facts only: the mapping into
+        /// trait axes lives in Psychology. Mirrors <see cref="GetRecentJobsSummary"/>'s accumulation.
+        /// </summary>
+        public void GetActivityMetrics(out float idleFraction, out float livingViolenceFraction)
+        {
+            idleFraction = 0f;
+            livingViolenceFraction = 0f;
+            int currentTick = Find.TickManager.TicksGame;
+            long total = 0, idle = 0, livingViolence = 0;
+
+            void Tally(string defName, string targetKind, int ticks)
+            {
+                if (defName == null || ticks <= 0) return;
+                total += ticks;
+                if (defName == "idle") idle += ticks;
+                if (IsCombatJob(defName) && (targetKind == "humanlike" || targetKind == "animal"))
+                    livingViolence += ticks;
+            }
+
+            if (recentJobs != null)
+                foreach (var interval in recentJobs)
+                    Tally(interval.jobDefName, interval.targetKind, interval.durationTicks);
+            if (lastJobDefName != null && lastJobStartedTick != -1)
+                Tally(lastJobDefName, lastJobTargetKind, currentTick - lastJobStartedTick);
+
+            if (total <= 0) { idleFraction = 1f; return; }
+            idleFraction = (float)idle / total;
+            livingViolenceFraction = (float)livingViolence / total;
+        }
+
+        /// <summary>
+        /// Detect skill rust and refresh the daily snapshot. A skill is "rusting" when it is expert-level
+        /// (>= <paramref name="expertLevel"/>) and has either dropped a level since the last snapshot, or
+        /// lost xp-toward-next-level while going unpractised today (xpSinceMidnight ~ 0). Returns the rusting
+        /// skills. The first call on a fresh comp only seeds the snapshot (returns none). Core owns the
+        /// snapshot state; Psychology calls this once per day at the rest edge.
+        /// </summary>
+        public List<SkillDef> UpdateAndGetRustedSkills(Pawn pawn, int expertLevel = 10, float idleXpToday = 50f)
+        {
+            var rusted = new List<SkillDef>();
+            if (pawn?.skills?.skills == null) return rusted;
+            if (skillLevelSnapshot == null) skillLevelSnapshot = new Dictionary<string, int>();
+            if (skillXpSinceLevelSnapshot == null) skillXpSinceLevelSnapshot = new Dictionary<string, float>();
+
+            bool hadSnapshot = skillLevelSnapshot.Count > 0;
+            foreach (var rec in pawn.skills.skills)
+            {
+                if (rec?.def == null) continue;
+                string key = rec.def.defName;
+                if (hadSnapshot && rec.Level >= expertLevel)
+                {
+                    bool droppedLevel = skillLevelSnapshot.TryGetValue(key, out int prevLevel) && rec.Level < prevLevel;
+                    bool xpEroding = skillXpSinceLevelSnapshot.TryGetValue(key, out float prevXp)
+                        && rec.xpSinceLastLevel < prevXp - 1f && rec.xpSinceMidnight < idleXpToday;
+                    if (droppedLevel || xpEroding) rusted.Add(rec.def);
+                }
+                skillLevelSnapshot[key] = rec.Level;
+                skillXpSinceLevelSnapshot[key] = rec.xpSinceLastLevel;
+            }
+            lastSkillSnapshotTick = Find.TickManager != null ? Find.TickManager.TicksAbs : 0L;
+            return rusted;
+        }
+
+        /// <summary>
+        /// The reinforcement dimension of the trait engine: fold today's average mood into a rolling
+        /// baseline (EMA) and return how today compares to it, in [-1, +1]. Positive = the pawn felt better
+        /// than usual (behaviours done today are reinforced); negative = worse (they're aversive). The first
+        /// call only seeds the baseline and returns 0. A trait needs its behaviour AND a matching-sign
+        /// reinforcement, so this is what makes every trait multidimensional rather than a raw behaviour count.
+        /// </summary>
+        public float UpdateMoodBaselineAndGetReinforcement(float todayMood, float scale = 0.15f)
+        {
+            todayMood = Clamp01(todayMood);
+            if (moodBaseline < 0f)
+            {
+                moodBaseline = todayMood; // first day: seed only, no reinforcement yet
+                return 0f;
+            }
+            float delta = (todayMood - moodBaseline) / (scale <= 0f ? 0.15f : scale);
+            if (delta > 1f) delta = 1f; else if (delta < -1f) delta = -1f;
+            moodBaseline = 0.9f * moodBaseline + 0.1f * todayMood;
+            return delta;
+        }
+
+        private static RoomStatDef _wealthRoomStat;
+
+        /// <summary>
+        /// A pawn's individual share of colony wealth (design: "no trait is one-dimensional" — wealth grounds
+        /// Greedy/Jealous/Ascetic). = personally owned assets (equipment/apparel/inventory + owned room) plus a
+        /// heavily-dampened slice of communal wealth (WealthTotal / (10 x free-colonist count)), because colony
+        /// wealth dwarfs any individual's — the damping keeps personal possessions the real differentiator.
+        /// Pawns/slaves are already counted in WealthTotal at the game's slave factor.
+        /// </summary>
+        public static float ComputeIndividualWealth(Pawn pawn)
+        {
+            if (pawn?.Map == null) return 0f;
+            float personal = WealthWatcher.GetEquipmentApparelAndInventoryWealth(pawn);
+            var room = pawn.ownership?.OwnedRoom;
+            if (room != null)
+            {
+                if (_wealthRoomStat == null) _wealthRoomStat = DefDatabase<RoomStatDef>.GetNamedSilentFail("Wealth");
+                if (_wealthRoomStat != null) personal += room.GetStat(_wealthRoomStat);
+            }
+            var ww = pawn.Map.wealthWatcher;
+            int n = pawn.Map.mapPawns.FreeColonistsCount;
+            if (n < 1) n = 1;
+            float communalShare = ww != null ? ww.WealthTotal / (10f * n) : 0f;
+            return personal + communalShare;
+        }
+
+        /// <summary>Average individual wealth across the map's free colonists (peer baseline for envy/greed).</summary>
+        public static float ColonyAverageIndividualWealth(Map map)
+        {
+            if (map == null) return 0f;
+            // Snapshot the roster: ComputeIndividualWealth reads mapPawns.FreeColonistsCount, which can
+            // rebuild the cached FreeColonists list mid-enumeration ("collection was modified" otherwise).
+            var colonists = map.mapPawns.FreeColonists.ToList();
+            if (colonists.Count == 0) return 0f;
+            float sum = 0f;
+            foreach (var c in colonists) sum += ComputeIndividualWealth(c);
+            return sum / colonists.Count;
         }
 
         /// <summary>
