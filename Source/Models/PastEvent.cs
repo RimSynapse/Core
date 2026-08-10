@@ -2,6 +2,10 @@ using Verse;
 
 namespace RimSynapse.Models
 {
+    /// <summary>How weighty an event is — drives coalescing (trivial repeats roll up, serious stay
+    /// individual), the significance floor, and dynamic memory length (Core#88).</summary>
+    public enum EventSeverity { Trivial, Standard, Serious, Major }
+
     public class PastEvent : IExposable
     {
         public string eventId;
@@ -13,6 +17,21 @@ namespace RimSynapse.Models
         public string category;
         public string factionName;
         public string settlementName;
+
+        // Episode coalescing (Core#88): a single ordeal (e.g. 27 crow claws) becomes ONE episode that
+        // accretes until it settles. severity drives rollup-vs-individual; the pawn-id tiers drive
+        // per-pawn, involvement-gated narration (involved = first-hand, witness = saw it, afterEffect =
+        // dealt with the consequences, e.g. the doctor who tended the wounded).
+        public EventSeverity severity = EventSeverity.Standard;
+        public int occurrenceCount = 1;
+        public int firstTick;
+        public int lastUpdateTick;
+        public System.Collections.Generic.List<string> involvedPawnIds = new System.Collections.Generic.List<string>();
+        public System.Collections.Generic.List<string> witnessPawnIds = new System.Collections.Generic.List<string>();
+        public System.Collections.Generic.List<string> afterEffectPawnIds = new System.Collections.Generic.List<string>();
+
+        /// <summary>Stable per-episode identity used to coalesce repeats of the same ordeal.</summary>
+        public string CoalesceKey => !string.IsNullOrEmpty(mcpTag) ? mcpTag : (category ?? "event");
 
         public string outcomeDescription;
         public EventOutcome outcome = EventOutcome.Unknown;
@@ -59,10 +78,21 @@ namespace RimSynapse.Models
             Scribe_Values.Look(ref colonySnapshot, "colonySnapshot");
             Scribe_Collections.Look(ref pawnSnapshots, "pawnSnapshots", LookMode.Value, LookMode.Value);
 
+            Scribe_Values.Look(ref severity, "severity", EventSeverity.Standard);
+            Scribe_Values.Look(ref occurrenceCount, "occurrenceCount", 1);
+            Scribe_Values.Look(ref firstTick, "firstTick", 0);
+            Scribe_Values.Look(ref lastUpdateTick, "lastUpdateTick", 0);
+            Scribe_Collections.Look(ref involvedPawnIds, "involvedPawnIds", LookMode.Value);
+            Scribe_Collections.Look(ref witnessPawnIds, "witnessPawnIds", LookMode.Value);
+            Scribe_Collections.Look(ref afterEffectPawnIds, "afterEffectPawnIds", LookMode.Value);
+
             if (Scribe.mode == LoadSaveMode.LoadingVars)
             {
                 if (pawnSnapshots == null) pawnSnapshots = new System.Collections.Generic.Dictionary<string, string>();
                 if (string.IsNullOrEmpty(eventId)) eventId = System.Guid.NewGuid().ToString();
+                if (involvedPawnIds == null) involvedPawnIds = new System.Collections.Generic.List<string>();
+                if (witnessPawnIds == null) witnessPawnIds = new System.Collections.Generic.List<string>();
+                if (afterEffectPawnIds == null) afterEffectPawnIds = new System.Collections.Generic.List<string>();
             }
 
             if (Scribe.mode == LoadSaveMode.PostLoadInit)

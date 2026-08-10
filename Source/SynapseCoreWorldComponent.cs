@@ -17,7 +17,19 @@ namespace RimSynapse
         public bool colonyStartGenerated = false;
         
         public List<PastEvent> backlogQueueList = new List<PastEvent>();
-        private Queue<PastEvent> _backlogQueue = new Queue<PastEvent>();
+        // Episode-coalescing backlog (Core#88). A List (not a Queue) so we can merge repeats and dequeue
+        // only settled episodes. All mutation is MAIN-THREAD ONLY (enqueue from Harmony postfixes; the
+        // async narration callback marshals through SynapseGameComponent.Enqueue before touching this).
+        private List<PastEvent> _backlog = new List<PastEvent>();
+        // Open (unsettled, still-coalescing) episodes keyed by CoalesceKey. Transient — not saved;
+        // rebuilt lazily from _backlog after load.
+        private Dictionary<string, PastEvent> _openEpisodes = new Dictionary<string, PastEvent>();
+        private bool _openEpisodesRebuilt = false;
+
+        // An episode is narratable once it has been quiet for this long (accretes into one memory first).
+        private const int EpisodeSettleTicks = 1250;   // ~30 in-game minutes
+        // Hard bound so an open-ended event (idle mechanoids that are never engaged) can't stay open forever.
+        private const int EpisodeMaxOpenTicks = 15000;  // ~6 in-game hours
         public List<FiredIncidentRecord> firedIncidentHistory = new List<FiredIncidentRecord>();
         public List<WealthRecord> wealthHistory = new List<WealthRecord>();
         public RaidOutcomeRecord lastRaidOutcome;
@@ -100,7 +112,7 @@ namespace RimSynapse
             if (Scribe.mode == LoadSaveMode.Saving)
             {
                 backlogQueueList.Clear();
-                backlogQueueList.AddRange(_backlogQueue);
+                backlogQueueList.AddRange(_backlog);
             }
 
             if (Scribe.mode == LoadSaveMode.PostLoadInit)
@@ -123,11 +135,10 @@ namespace RimSynapse
                 if (raidRecruitedPawns == null) raidRecruitedPawns = new Dictionary<string, List<string>>();
                 if (visitorEntryTicks == null) visitorEntryTicks = new Dictionary<string, int>();
                 
-                _backlogQueue.Clear();
-                foreach (var pastEvent in backlogQueueList)
-                {
-                    _backlogQueue.Enqueue(pastEvent);
-                }
+                _backlog.Clear();
+                if (backlogQueueList != null) _backlog.AddRange(backlogQueueList);
+                _openEpisodes.Clear();
+                _openEpisodesRebuilt = false;
             }
         }
 
@@ -326,7 +337,7 @@ namespace RimSynapse
         {
             if (string.IsNullOrEmpty(eventId)) return;
 
-            foreach (var ev in _backlogQueue)
+            foreach (var ev in _backlog)
             {
                 if (ev.eventId == eventId)
                 {
@@ -363,62 +374,155 @@ namespace RimSynapse
         {
             if (pastEvent == null) return;
             pastEvent.EnsureMcpTag();
-            if (Find.AnyPlayerHomeMap != null)
+
+            int now = Find.TickManager != null ? Find.TickManager.TicksGame : GenTicks.TicksGame;
+            if (pastEvent.firstTick == 0) pastEvent.firstTick = now;
+            pastEvent.lastUpdateTick = now;
+
+            EnsureOpenEpisodeIndex();
+
+            // Coalesce trivial/standard repeats of the same still-open ordeal (e.g. 27 crow claws) into
+            // one growing episode. Serious/Major events are always their own entry.
+            if (pastEvent.severity <= EventSeverity.Standard)
             {
-                Map map = Find.AnyPlayerHomeMap;
-                
-                // Take a quick snapshot of the colony status
-                float nutrition = map.resourceCounter.TotalHumanEdibleNutrition;
-                pastEvent.colonySnapshot = $"Wealth: {map.wealthWatcher.WealthTotal:F0}, Nutrition Available: {nutrition:F0}";
-
-                pastEvent.startWealth = map.wealthWatcher.WealthTotal;
-                pastEvent.startFoodNutrition = nutrition;
-
-                // Take snapshots of all free colonists
-                foreach (Pawn pawn in map.mapPawns.FreeColonistsSpawned)
+                string key = pastEvent.CoalesceKey;
+                if (_openEpisodes.TryGetValue(key, out var open) && _backlog.Contains(open) && !IsEpisodeSettled(open, now))
                 {
-                    if (pawn.needs != null && pawn.needs.mood != null && pawn.needs.food != null && pawn.needs.rest != null)
-                    {
-                        string moodStr = pawn.needs.mood.CurLevelPercentage.ToStringPercent();
-                        string foodStr = pawn.needs.food.CurLevelPercentage.ToStringPercent();
-                        string restStr = pawn.needs.rest.CurLevelPercentage.ToStringPercent();
-                        pastEvent.pawnSnapshots[pawn.ThingID] = $"Mood: {moodStr}, Food: {foodStr}, Rest: {restStr}";
-                    }
+                    open.occurrenceCount++;
+                    open.lastUpdateTick = now;
+                    if (pastEvent.severity > open.severity) open.severity = pastEvent.severity;
+                    MergePawnIds(open.involvedPawnIds, pastEvent.involvedPawnIds);
+                    MergePawnIds(open.witnessPawnIds, pastEvent.witnessPawnIds);
+                    MergePawnIds(open.afterEffectPawnIds, pastEvent.afterEffectPawnIds);
+                    if (!string.IsNullOrEmpty(pastEvent.eventDescription)) open.eventDescription = pastEvent.eventDescription;
+                    return; // merged — no new entry, no re-snapshot
                 }
             }
-            
-            _backlogQueue.Enqueue(pastEvent);
-            while (_backlogQueue.Count > 50)
+
+            SnapshotColony(pastEvent);
+            _backlog.Add(pastEvent);
+            if (pastEvent.severity <= EventSeverity.Standard) _openEpisodes[pastEvent.CoalesceKey] = pastEvent;
+
+            // Cap: evict the lowest-severity, oldest event first, so trivial spam never pushes out a
+            // serious episode.
+            while (_backlog.Count > 50)
             {
-                _backlogQueue.Dequeue();
+                var victim = _backlog.OrderBy(e => (int)e.severity).ThenBy(e => e.lastUpdateTick).First();
+                RemoveBacklogEvent(victim);
             }
+        }
+
+        /// <summary>Take the colony/pawn snapshot for a fresh (non-merged) event.</summary>
+        private void SnapshotColony(PastEvent pastEvent)
+        {
+            if (Find.AnyPlayerHomeMap == null) return;
+            Map map = Find.AnyPlayerHomeMap;
+
+            float nutrition = map.resourceCounter.TotalHumanEdibleNutrition;
+            pastEvent.colonySnapshot = $"Wealth: {map.wealthWatcher.WealthTotal:F0}, Nutrition Available: {nutrition:F0}";
+            pastEvent.startWealth = map.wealthWatcher.WealthTotal;
+            pastEvent.startFoodNutrition = nutrition;
+
+            foreach (Pawn pawn in map.mapPawns.FreeColonistsSpawned)
+            {
+                if (pawn.needs != null && pawn.needs.mood != null && pawn.needs.food != null && pawn.needs.rest != null)
+                {
+                    string moodStr = pawn.needs.mood.CurLevelPercentage.ToStringPercent();
+                    string foodStr = pawn.needs.food.CurLevelPercentage.ToStringPercent();
+                    string restStr = pawn.needs.rest.CurLevelPercentage.ToStringPercent();
+                    pastEvent.pawnSnapshots[pawn.ThingID] = $"Mood: {moodStr}, Food: {foodStr}, Rest: {restStr}";
+                }
+            }
+        }
+
+        /// <summary>Register an already-enqueued event as the open episode for its subject (used by the
+        /// injury/tend capture path to attach witnesses/after-effect pawns to the right ordeal).</summary>
+        public PastEvent FindOpenEpisode(string coalesceKey)
+        {
+            if (string.IsNullOrEmpty(coalesceKey)) return null;
+            EnsureOpenEpisodeIndex();
+            int now = Find.TickManager != null ? Find.TickManager.TicksGame : GenTicks.TicksGame;
+            if (_openEpisodes.TryGetValue(coalesceKey, out var ev) && _backlog.Contains(ev) && !IsEpisodeSettled(ev, now))
+                return ev;
+            return null;
+        }
+
+        /// <summary>The most recent still-open episode a pawn is involved in — the target an after-effect
+        /// participant (e.g. a doctor tending them) attaches to. Null if none is open.</summary>
+        public PastEvent FindOpenEpisodeForPawn(Pawn pawn)
+        {
+            if (pawn == null) return null;
+            int now = Find.TickManager != null ? Find.TickManager.TicksGame : GenTicks.TicksGame;
+            return _backlog
+                .Where(e => !IsEpisodeSettled(e, now) && e.involvedPawnIds != null && e.involvedPawnIds.Contains(pawn.ThingID))
+                .OrderByDescending(e => e.lastUpdateTick)
+                .FirstOrDefault();
+        }
+
+        private bool IsEpisodeSettled(PastEvent ev, int now)
+        {
+            return (now - ev.lastUpdateTick) >= EpisodeSettleTicks || (now - ev.firstTick) >= EpisodeMaxOpenTicks;
+        }
+
+        private void EnsureOpenEpisodeIndex()
+        {
+            if (_openEpisodesRebuilt) return;
+            _openEpisodesRebuilt = true;
+            _openEpisodes.Clear();
+            foreach (var ev in _backlog)
+                if (ev.severity <= EventSeverity.Standard)
+                    _openEpisodes[ev.CoalesceKey] = ev; // last-wins
+        }
+
+        private void RemoveBacklogEvent(PastEvent ev)
+        {
+            _backlog.Remove(ev);
+            if (_openEpisodes.TryGetValue(ev.CoalesceKey, out var oe) && oe == ev) _openEpisodes.Remove(ev.CoalesceKey);
+        }
+
+        private static void MergePawnIds(List<string> dst, List<string> src)
+        {
+            if (dst == null || src == null) return;
+            for (int i = 0; i < src.Count; i++)
+                if (!string.IsNullOrEmpty(src[i]) && !dst.Contains(src[i])) dst.Add(src[i]);
         }
 
         public bool TryDequeuePastEvent(out PastEvent pastEvent)
         {
-            if (_backlogQueue.Count > 0)
+            pastEvent = null;
+            int now = Find.TickManager != null ? Find.TickManager.TicksGame : GenTicks.TicksGame;
+            EnsureOpenEpisodeIndex();
+
+            // Only settled episodes are narratable — an ongoing ordeal keeps accreting first. Oldest first.
+            var settled = _backlog.Where(e => IsEpisodeSettled(e, now)).OrderBy(e => e.lastUpdateTick).ToList();
+            foreach (var ev in settled)
             {
-                pastEvent = _backlogQueue.Dequeue();
+                // Significance floor: a lone trivial blip that never accreted is dropped, never narrated.
+                if (ev.severity == EventSeverity.Trivial && ev.occurrenceCount <= 1)
+                {
+                    RemoveBacklogEvent(ev);
+                    continue;
+                }
+                RemoveBacklogEvent(ev);
+                pastEvent = ev;
                 return true;
             }
-            
-            pastEvent = null;
             return false;
         }
 
-        public int BacklogCount => _backlogQueue.Count;
+        public int BacklogCount => _backlog.Count;
 
         public IEnumerable<PastEvent> GetRecentEvents(int count)
         {
-            return System.Linq.Enumerable.Skip(_backlogQueue, System.Math.Max(0, _backlogQueue.Count - count));
+            return System.Linq.Enumerable.Skip(_backlog, System.Math.Max(0, _backlog.Count - count));
         }
 
-        public IEnumerable<PastEvent> AllEvents => _backlogQueue;
+        public IEnumerable<PastEvent> AllEvents => _backlog;
 
         public List<PastEvent> GetMostSignificantEvents(int count)
         {
             var list = new List<PastEvent>();
-            list.AddRange(_backlogQueue);
+            list.AddRange(_backlog);
             
             // Exclude legendary art creation events to prevent recursion/meta art loops
             list.RemoveAll(e => e.category == "LegendaryArtCreated" || 
