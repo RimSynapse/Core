@@ -215,6 +215,12 @@ namespace RimSynapse
         /// <summary>Hold for quest / opportunity offers. Defaults to the global 2 days.</summary>
         public float deferDaysQuest = 2f;
 
+        /// <summary>
+        /// Fraction of non-player settlements that generate a flavor world-news event each in-game day
+        /// (WorldNews world-events system). 0.10 ≈ 5 events/day across ~50 settlements. 0 = off.
+        /// </summary>
+        public float worldNewsGenFraction = 0.10f;
+
         public override void ExposeData()
         {
             base.ExposeData();
@@ -235,6 +241,7 @@ namespace RimSynapse
             Scribe_Values.Look(ref deferDaysDefault, "deferDaysDefault", 2f);
             Scribe_Values.Look(ref deferDaysThreat, "deferDaysThreat", 0f);
             Scribe_Values.Look(ref deferDaysQuest, "deferDaysQuest", 2f);
+            Scribe_Values.Look(ref worldNewsGenFraction, "worldNewsGenFraction", 0.10f);
             
             Scribe_Values.Look(ref lmStudioUrl, "lmStudioUrl", "http://127.0.0.1:1234");
             Scribe_Values.Look(ref lmStudioApiKey, "lmStudioApiKey", "");

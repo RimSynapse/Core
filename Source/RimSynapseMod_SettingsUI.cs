@@ -101,6 +101,18 @@ namespace RimSynapse
                 listing.Label("  Finer per-event overrides are planned; for now these categories cover every letter.");
             }
 
+            // ── World news generation (0.8) ─────────────────────────
+            listing.Gap(10f);
+            listing.Label("World News Generation",
+                tooltip: "Each in-game day, this fraction of the non-player settlements generate a flavour " +
+                    "world-news event (rolled by the LLM) that surfaces through WorldNews. First iteration " +
+                    "is flavour only — it does not yet change the world. 0% turns generation off.");
+            listing.GapLine();
+            Settings.worldNewsGenFraction = (float)Math.Round(listing.SliderLabeled(
+                $"  Settlements generating news per day: {(Settings.worldNewsGenFraction * 100f):0}%",
+                Settings.worldNewsGenFraction, 0f, 1f,
+                tooltip: "Default 10%. With ~50 non-player settlements, 10% is about 5 world-news events a day."), 2);
+
             listing.Gap(4f);
             string tierModeLabel;
             switch (Settings.agentTierMode)
