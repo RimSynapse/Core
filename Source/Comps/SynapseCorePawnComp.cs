@@ -1033,6 +1033,59 @@ namespace RimSynapse.Comps
             return sum / colonists.Count;
         }
 
+        // Reflection into PlayLogEntry_Interaction's protected initiator/intDef — resolved once, and if it
+        // ever fails the social signal simply goes quiet (returns 0) rather than throwing.
+        private static System.Reflection.FieldInfo _fiInitiator;
+        private static System.Reflection.FieldInfo _fiIntDef;
+        private static bool _socialReflectionResolved;
+
+        /// <summary>
+        /// Count the pawn's own social interactions over the last day, split by tone (positive vs negative),
+        /// from the play log. Raw fact only — Psychology maps it to Kind/Abrasive. Initiator-attributed, so
+        /// being insulted doesn't make YOU abrasive.
+        /// </summary>
+        public static void GetSocialToneToday(Pawn pawn, out int positive, out int negative)
+        {
+            positive = 0; negative = 0;
+            if (pawn == null || Find.PlayLog == null || Find.TickManager == null) return;
+            if (!_socialReflectionResolved)
+            {
+                _socialReflectionResolved = true;
+                var t = typeof(PlayLogEntry_Interaction);
+                const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                _fiInitiator = t.GetField("initiator", F);
+                _fiIntDef = t.GetField("intDef", F);
+            }
+            if (_fiInitiator == null || _fiIntDef == null) return;
+
+            int now = Find.TickManager.TicksGame;
+            var entries = Find.PlayLog.AllEntries;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (!(entries[i] is PlayLogEntry_Interaction e)) continue;
+                if (now - e.Tick > 60000) continue; // older than a day
+                if (!(_fiInitiator.GetValue(e) is Pawn init) || init != pawn) continue;
+                var def = _fiIntDef.GetValue(e) as InteractionDef;
+                if (def == null) continue;
+                if (IsPositiveInteraction(def)) positive++;
+                else if (IsNegativeInteraction(def)) negative++;
+            }
+        }
+
+        private static bool IsPositiveInteraction(InteractionDef def)
+        {
+            if (def == InteractionDefOf.Chitchat || def == InteractionDefOf.DeepTalk) return true;
+            string n = def.defName;
+            return n == "KindWords" || n == "BuildRapport" || n == "RomanceAttempt" || n == "MarriageProposal";
+        }
+
+        private static bool IsNegativeInteraction(InteractionDef def)
+        {
+            if (def == InteractionDefOf.Insult) return true;
+            string n = def.defName;
+            return n == "Slight" || n.Contains("Insult");
+        }
+
         /// <summary>
         /// The personality prose consumers (Conversations, the trait-engine judge, tools) should read: the
         /// LLM-synthesised summary when a producer (Psychology) has filled it, else a deterministic baseline
