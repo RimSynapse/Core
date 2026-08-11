@@ -996,6 +996,13 @@ namespace RimSynapse.Comps
 
         private static RoomStatDef _wealthRoomStat;
 
+        // Per-map daily cache for the colony wealth average. The average is identical for every pawn on a
+        // given day, but each pawn's rest edge would otherwise recompute it by walking every colonist's
+        // wealth — O(N) each, O(N²) across the colony per day. Cache by (map, day) so it's computed once
+        // per colony per day. Stale-by-at-most-one-day and self-healing on any game/map switch.
+        private static readonly Dictionary<int, int> _colonyWealthDay = new Dictionary<int, int>();
+        private static readonly Dictionary<int, float> _colonyWealthAvg = new Dictionary<int, float>();
+
         /// <summary>
         /// A pawn's individual share of colony wealth (design: "no trait is one-dimensional" — wealth grounds
         /// Greedy/Jealous/Ascetic). = personally owned assets (equipment/apparel/inventory + owned room) plus a
@@ -1024,13 +1031,26 @@ namespace RimSynapse.Comps
         public static float ColonyAverageIndividualWealth(Map map)
         {
             if (map == null) return 0f;
+
+            // Serve from the per-map daily cache when this colony was already averaged today (see field docs:
+            // turns the colony-wide O(N²)/day into O(N)/day, since every pawn's rest edge asks the same thing).
+            int today = GenDate.DaysPassed;
+            if (_colonyWealthDay.TryGetValue(map.uniqueID, out int cachedDay) && cachedDay == today)
+                return _colonyWealthAvg[map.uniqueID];
+
             // Snapshot the roster: ComputeIndividualWealth reads mapPawns.FreeColonistsCount, which can
             // rebuild the cached FreeColonists list mid-enumeration ("collection was modified" otherwise).
             var colonists = map.mapPawns.FreeColonists.ToList();
-            if (colonists.Count == 0) return 0f;
-            float sum = 0f;
-            foreach (var c in colonists) sum += ComputeIndividualWealth(c);
-            return sum / colonists.Count;
+            float avg = 0f;
+            if (colonists.Count > 0)
+            {
+                float sum = 0f;
+                foreach (var c in colonists) sum += ComputeIndividualWealth(c);
+                avg = sum / colonists.Count;
+            }
+            _colonyWealthDay[map.uniqueID] = today;
+            _colonyWealthAvg[map.uniqueID] = avg;
+            return avg;
         }
 
         // Reflection into PlayLogEntry_Interaction's protected initiator/intDef — resolved once, and if it
