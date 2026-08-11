@@ -67,7 +67,40 @@ namespace RimSynapse
                     Settings.modelContextLimit, 2048f, 131072f,
                     tooltip: "Manually specify your local LLM's context length (e.g. 32768, 16384, or 8192) if it cannot be dynamically detected from the provider API. Controls prompt size limits and paginators.");
             }
-            
+
+            // ── Deferred news & bulletins (0.8) ─────────────────────
+            listing.Gap(10f);
+            listing.Label("Deferred News & Bulletins",
+                tooltip: "News travels slowly on the rim. Events are held for a delay and released later; " +
+                    "with a powered comms console you get an advance breaking-news bulletin on screen, " +
+                    "otherwise you only learn of an event when it finally arrives.");
+            listing.GapLine();
+
+            listing.CheckboxLabeled("Enable deferred news pipeline",
+                ref Settings.deferNewsEnabled,
+                "Hold news-worthy events and release them after a delay. Turn OFF for vanilla-timed events " +
+                "— e.g. when you are not running an LLM storyteller or the WorldNews mod.");
+
+            if (Settings.deferNewsEnabled)
+            {
+                Settings.deferDaysDefault = (float)Math.Round(listing.SliderLabeled(
+                    $"  Default delay: {Settings.deferDaysDefault:0.0} days",
+                    Settings.deferDaysDefault, 0f, 5f,
+                    tooltip: "How long most events are held before they arrive. 0 = immediate."), 1);
+
+                Settings.deferDaysQuest = (float)Math.Round(listing.SliderLabeled(
+                    $"  Quest / opportunity delay: {Settings.deferDaysQuest:0.0} days",
+                    Settings.deferDaysQuest, 0f, 5f,
+                    tooltip: "Delay for quest and opportunity offers — this is the lead time you lose without comms."), 1);
+
+                Settings.deferDaysThreat = (float)Math.Round(listing.SliderLabeled(
+                    $"  Combat threat delay: {Settings.deferDaysThreat:0.0} days",
+                    Settings.deferDaysThreat, 0f, 5f,
+                    tooltip: "Delay for raids and sieges. Default 0 so an active attack is never announced late."), 1);
+
+                listing.Label("  Finer per-event overrides are planned; for now these categories cover every letter.");
+            }
+
             listing.Gap(4f);
             string tierModeLabel;
             switch (Settings.agentTierMode)
