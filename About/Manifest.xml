@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  RimSynapse compatibility manifest. About.xml has no native version field, so this companion
+  file carries the machine-readable version + Core dependency floor. RimSynapse Core's
+  SynapseCompatChecker reads every RimSynapse mod's Manifest.xml at load to warn when a module
+  needs a newer Core than is installed, and (opt-in) when a newer version is available.
+  Interoperable with the community "Version Checker" mod.
+
+  Core declares no <coreVersion> — it IS Core. Companion mods add:
+    <coreVersion>0.8.0.0</coreVersion>   the minimum Core they require
+-->
+<Manifest>
+  <version>0.7.1</version>
+  <manifestUri>https://raw.githubusercontent.com/RimSynapse/Core/main/About/Manifest.xml</manifestUri>
+  <downloadUri>https://github.com/RimSynapse/Core/releases/latest</downloadUri>
+  <workshopId>3760829776</workshopId>
+</Manifest>
