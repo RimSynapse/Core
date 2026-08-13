@@ -74,4 +74,71 @@
     <consolidationContribution>1.0</consolidationContribution>
   </RimSynapse.SynapseMemoryClassDef>
 
+  <!-- Pivotal life-events (Core #92): identity-defining moments a pawn would never lose —
+       recruited, arrested, captured, enslaved, converted, freed, escape attempt. Born long-term,
+       so they survive decay AND consolidation. The set is a def list: add a bornLongTerm class here
+       to secure a new pivotal event (only a new in-game trigger needs code). -->
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_LifeEventRecruited</defName>
+    <memoryType>LifeEvent_Recruited</memoryType>
+    <baseWeight>0.9</baseWeight>
+    <decayRate>0</decayRate>
+    <bornLongTerm>true</bornLongTerm>
+    <consolidationContribution>0.9</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_LifeEventArrested</defName>
+    <memoryType>LifeEvent_Arrested</memoryType>
+    <baseWeight>0.9</baseWeight>
+    <decayRate>0</decayRate>
+    <bornLongTerm>true</bornLongTerm>
+    <consolidationContribution>0.9</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_LifeEventCaptured</defName>
+    <memoryType>LifeEvent_Captured</memoryType>
+    <baseWeight>0.9</baseWeight>
+    <decayRate>0</decayRate>
+    <bornLongTerm>true</bornLongTerm>
+    <consolidationContribution>0.9</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_LifeEventEnslaved</defName>
+    <memoryType>LifeEvent_Enslaved</memoryType>
+    <baseWeight>1.0</baseWeight>
+    <decayRate>0</decayRate>
+    <bornLongTerm>true</bornLongTerm>
+    <consolidationContribution>1.0</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_LifeEventConverted</defName>
+    <memoryType>LifeEvent_Converted</memoryType>
+    <baseWeight>0.9</baseWeight>
+    <decayRate>0</decayRate>
+    <bornLongTerm>true</bornLongTerm>
+    <consolidationContribution>0.9</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_LifeEventFreed</defName>
+    <memoryType>LifeEvent_Freed</memoryType>
+    <baseWeight>0.9</baseWeight>
+    <decayRate>0</decayRate>
+    <bornLongTerm>true</bornLongTerm>
+    <consolidationContribution>0.9</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_LifeEventEscapeAttempt</defName>
+    <memoryType>LifeEvent_EscapeAttempt</memoryType>
+    <baseWeight>0.9</baseWeight>
+    <decayRate>0</decayRate>
+    <bornLongTerm>true</bornLongTerm>
+    <consolidationContribution>0.9</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
 </Defs>

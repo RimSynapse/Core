@@ -51,16 +51,20 @@ namespace RimSynapse.Patches
             {
                 category = "PawnEnslaved";
                 description = $"{__instance.Name?.ToStringShort ?? __instance.KindLabel} has been enslaved.";
+                // #92: enslavement is an identity-defining event — secure it as a long-term memory.
+                SynapsePivotalMemory.Record(__instance, SynapsePivotalMemory.Enslaved, description);
             }
             else if (wasPrisonerBefore)
             {
                 category = "PrisonerRecruited";
                 description = $"{__instance.Name?.ToStringShort ?? __instance.KindLabel} has been recruited from prison.";
+                SynapsePivotalMemory.Record(__instance, SynapsePivotalMemory.Recruited, description);
             }
             else
             {
                 category = "PawnRecruited";
                 description = $"{__instance.Name?.ToStringShort ?? __instance.KindLabel} has joined the colony.";
+                SynapsePivotalMemory.Record(__instance, SynapsePivotalMemory.Recruited, description);
             }
 
             coreComp.EnqueuePastEvent(new PastEvent
