@@ -76,19 +76,32 @@ namespace RimSynapse.Compat
         {
             CompatReport report = Check();
 
+            // Register Core itself so the runtime registry has a complete picture. Core requires no
+            // Core (contract 0) and its version is whatever its own manifest declares.
+            SynapseCompatRegistry.Register("rimsynapse.core", "RimSynapse Core",
+                report.InstalledCore?.ToString(), 0, null);
+
+            // The runtime contract check (slice 2) is the authoritative one: it is tied to the API
+            // that actually loaded, not to a declared semver. Combined with the manifest-floor check
+            // into a single letter so the player sees one message, not two.
+            var contractIssues = SynapseCompatRegistry.ContractIncompatibilities().ToList();
+
             SynapseLogger.Message(
-                $"[RimSynapse] Compat: {report.Manifests.Count} RimSynapse mod(s) with a manifest, " +
-                $"Core {(report.InstalledCore?.ToString() ?? "unknown")}, " +
-                $"{report.Incompatibilities.Count} incompatibility(ies), " +
+                $"[RimSynapse] Compat: {report.Manifests.Count} manifest(s), " +
+                $"Core {(report.InstalledCore?.ToString() ?? "unknown")} (API {SynapseCompatRegistry.CoreApiContract}), " +
+                $"{report.Incompatibilities.Count} version-floor issue(s), " +
+                $"{contractIssues.Count} contract issue(s), " +
                 $"{report.MissingManifest.Count} without a manifest.");
 
-            if (report.Incompatibilities.Count == 0) return;
+            if (report.Incompatibilities.Count == 0 && contractIssues.Count == 0) return;
 
             var sb = new StringBuilder();
             sb.AppendLine("RimSynapse detected version incompatibilities:");
             sb.AppendLine();
             foreach (Incompatibility inc in report.Incompatibilities)
                 sb.AppendLine($"• {inc.Mod.ModName} needs Core {inc.Required} or newer, but Core {inc.InstalledCore} is installed.");
+            foreach (SynapseCompatRegistry.Registration r in contractIssues)
+                sb.AppendLine($"• {r.ModName} needs Core API {r.RequiredCoreContract} or newer, but this Core provides API {SynapseCompatRegistry.CoreApiContract}.");
             sb.AppendLine();
             sb.AppendLine("Update RimSynapse Core (and any out-of-date modules) so their versions match.");
 

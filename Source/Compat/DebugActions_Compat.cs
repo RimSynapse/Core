@@ -1,3 +1,4 @@
+using System.Linq;
 using LudeonTK;
 using Verse;
 
@@ -16,6 +17,18 @@ namespace RimSynapse.Compat
         private static void CompatCheckNow()
         {
             SynapseLogger.Message(SynapseCompatChecker.DumpReport());
+        }
+
+        [DebugAction("RimSynapse", "Compat: registry dump",
+            actionType = DebugActionType.Action,
+            allowedGameStates = AllowedGameStates.Entry | AllowedGameStates.PlayingOnMap | AllowedGameStates.PlayingOnWorld)]
+        private static void CompatRegistryDump()
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine(SynapseCompatRegistry.Dump());
+            int incompatible = SynapseCompatRegistry.ContractIncompatibilities().Count();
+            sb.AppendLine($"  Contract incompatibilities: {incompatible}");
+            SynapseLogger.Message(sb.ToString());
         }
     }
 }
