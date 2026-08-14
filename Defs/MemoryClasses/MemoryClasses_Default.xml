@@ -45,6 +45,18 @@
     <consolidationContribution>0.6</consolidationContribution>
   </RimSynapse.SynapseMemoryClassDef>
 
+  <!-- Defining arrival memory (Psychology #22): the day a pawn arrived — a near-permanent identity
+       anchor planted via SynapsePsychology.PlantDefiningMemory. Born long-term (pruning-exempt); the
+       nominal 0.001 decay is documentary, since long-term memories are never decayed. -->
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_BackstoryArrival</defName>
+    <memoryType>BackstoryArrival</memoryType>
+    <baseWeight>0.7</baseWeight>
+    <decayRate>0.001</decayRate>
+    <bornLongTerm>true</bornLongTerm>
+    <consolidationContribution>0.8</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
   <!-- Backstory: defining, permanent identity. Born long-term (never decays). -->
   <RimSynapse.SynapseMemoryClassDef>
     <defName>SynapseMemoryClass_BackstoryChildhood</defName>
