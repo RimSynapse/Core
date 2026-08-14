@@ -110,6 +110,10 @@ namespace RimSynapse
             // Process callbacks from the queue (LLM results, log dispatch, etc.)
             ProcessMainThreadQueue();
 
+            // Drive deferred-event deadlines (Core #59). Cheap when idle; runs every frame — including
+            // while paused and before a map exists — so a held letter always releases at its deadline.
+            SynapseDeferredEvents.Tick();
+
             _fileCheckCooldown++;
             if (_fileCheckCooldown >= 60)
             {
