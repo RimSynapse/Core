@@ -10,7 +10,7 @@
     <coreVersion>0.8.0.0</coreVersion>   the minimum Core they require
 -->
 <Manifest>
-  <version>0.7.1</version>
+  <version>0.8.0</version>
   <manifestUri>https://raw.githubusercontent.com/RimSynapse/Core/main/About/Manifest.xml</manifestUri>
   <downloadUri>https://github.com/RimSynapse/Core/releases/latest</downloadUri>
   <workshopId>3760829776</workshopId>
