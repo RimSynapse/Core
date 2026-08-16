@@ -39,6 +39,9 @@ namespace RimSynapse
             /// <summary>Whether this script's tool steps may mutate game state.</summary>
             public bool allowMutatingTools = true;
 
+            /// <summary>Tool-vocabulary scope for this script's steps; null = unscoped (Core #63).</summary>
+            public string toolScope = null;
+
             /// <summary>
             /// Set on restore from a save. The next Tick re-anchors the wait timeout (or
             /// continues execution) instead of comparing against a stale waitStartTick.
@@ -61,6 +64,7 @@ namespace RimSynapse
             public int waitRemainingTicks;
             public Dictionary<string, string> results;
             public bool allowMutatingTools = true;
+            public string toolScope = null;
         }
 
         /// <summary>Read-only view of one active script, for persistence tests and the debugger.</summary>
@@ -103,7 +107,7 @@ namespace RimSynapse
 
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("Script step reference:");
-            sb.AppendLine("- Any tool name can be a step \"type\"; its \"arguments\" follow that tool's schema (inspect with describe_tool). Unknown tool names are reported and skipped.");
+            sb.AppendLine("- Any tool name can be a step \"type\"; its \"arguments\" follow that tool's schema (inspect with describe_tool). Unknown tool names are reported and skipped. When the run is scoped to a tool vocabulary, only tools in that vocabulary may be steps.");
             sb.AppendLine("- \"call_tool\": run a tool named in arguments — { \"tool\": \"<name>\", \"arguments\": { ... } }. Use when a tool's name collides with a step keyword.");
             sb.AppendLine($"- \"wait_until\": pause until a condition holds — {{ \"condition\": \"<name>\", \"pawnName\": \"<pawn>\", \"timeoutTicks\": 6000 }}. Conditions: {string.Join(", ", conditions)}. On timeout the script continues to the next step.");
             sb.AppendLine("- Any tool step may include \"resultKey\": \"<label>\" to store its result; stored and oversized results are retrieved later with get_stored_result.");
@@ -187,6 +191,7 @@ namespace RimSynapse
                         : 0,
                     results = a.results.Count > 0 ? new Dictionary<string, string>(a.results) : null,
                     allowMutatingTools = a.allowMutatingTools,
+                    toolScope = a.toolScope,
                 });
             }
 
@@ -245,6 +250,9 @@ namespace RimSynapse
                     waitTimeoutTicks = Math.Max(1, p.waitRemainingTicks),
                     waitStartTick = 0,
                     allowMutatingTools = p.allowMutatingTools,
+                    // Restored verbatim so a save/load cannot launder a scoped script into
+                    // full scope (the persisted field is null for pre-scope saves = unscoped).
+                    toolScope = p.toolScope,
                     pendingResume = true,
                     logCallback = line => SynapseLogger.Message(line, "performance"),
                     onFinished = null,
@@ -294,6 +302,16 @@ namespace RimSynapse
 
         public static void StartScript(SynapseScript script, Action<string> logCallback, Action onFinished, bool allowMutatingTools)
         {
+            StartScript(script, logCallback, onFinished, allowMutatingTools, toolScope: null);
+        }
+
+        /// <summary>
+        /// Start a script under a tool-vocabulary scope (Core #63): every step's verb must
+        /// be in the scope or the whole script is refused at validation, and the scope rides
+        /// the script through execution and save/load. Null scope = unscoped.
+        /// </summary>
+        public static void StartScript(SynapseScript script, Action<string> logCallback, Action onFinished, bool allowMutatingTools, string toolScope)
+        {
             if (script == null || script.steps == null || script.steps.Count == 0) return;
 
             // Normalise legacy aliases up front (each rewrite is logged), then check the
@@ -301,7 +319,7 @@ namespace RimSynapse
             // refused with every error named — onFinished still runs, so an agent chain
             // receives the errors through its normal feedback and can correct the shape.
             SynapseScriptValidator.NormalizeAliases(script, logCallback);
-            var errors = SynapseScriptValidator.Validate(script, logCallback);
+            var errors = SynapseScriptValidator.Validate(script, logCallback, toolScope);
             if (errors.Count > 0)
             {
                 logCallback?.Invoke($"[Script Runner] Script '{script.scriptName}' rejected — {errors.Count} validation error(s):");
@@ -327,7 +345,8 @@ namespace RimSynapse
                 currentStepIndex = 0,
                 logCallback = logCallback,
                 onFinished = onFinished,
-                allowMutatingTools = allowMutatingTools
+                allowMutatingTools = allowMutatingTools,
+                toolScope = string.IsNullOrEmpty(toolScope) ? null : toolScope
             };
             
             _activeScripts.Add(active);
@@ -456,7 +475,7 @@ namespace RimSynapse
             active.logCallback?.Invoke($"[Script Runner] Executing step {stepNumber}: {toolName}");
             try
             {
-                string result = SynapseToolRegistry.ExecuteTool(toolName, JsonConvert.SerializeObject(args), active.allowMutatingTools);
+                string result = SynapseToolRegistry.ExecuteTool(toolName, JsonConvert.SerializeObject(args), active.allowMutatingTools, active.toolScope);
 
                 // Handlers report their own failures in the payload, so a returned error is not
                 // an ordinary result and should not read like one.

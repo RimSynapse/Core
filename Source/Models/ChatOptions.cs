@@ -42,6 +42,14 @@ namespace RimSynapse
         /// <summary>Maximum time in milliseconds this request can sit in the queue before being dropped. Null = infinite.</summary>
         public int? maxWaitMs;
 
+        /// <summary>
+        /// Tool-vocabulary scope for native tool calls made by this request (Core #63).
+        /// Null = unscoped (every registered tool). The request queue passes it to
+        /// SynapseToolRegistry.ExecuteTool, so a verb outside the scope is refused at the
+        /// executor no matter what the model asks for.
+        /// </summary>
+        public string toolScope;
+
         // --- Context Embedding ---
 
         /// <summary>

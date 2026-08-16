@@ -48,6 +48,12 @@ run_suite deferred \
     Tests/DeferredEventTests.cs \
     $SRC/SynapseDeferredEventPipeline.cs
 
+# The tool vocabulary (Core #63) is game-free by design: the allowlist and the
+# difficulty clamp compile with no stubs. Executor enforcement is Tier-2.
+run_suite vocabulary \
+    Tests/ToolVocabularyTests.cs \
+    $SRC/Comps/SynapseToolVocabulary.cs
+
 echo
 if [ "$failures" -eq 0 ]; then
     echo "ALL SUITES PASSED"

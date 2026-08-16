@@ -97,25 +97,23 @@ Analyze the situation and provide the PacingMultiplier and CategoryMultipliers."
         {
             RimSynapse.SynapseLogger.Message($"[RimSynapse-Core] Storyteller Pacing requested tools: {string.Join(", ", requestedTools)}. Running second pass...");
 
+            // The storyteller runs on the storyteller vocabulary (Core #63): a requested
+            // tool outside it is not offered — and even an hallucinated call would be
+            // refused at the executor, because toolScope rides the request options.
+            var grantedTools = FilterToStorytellerVocabulary(requestedTools, "Pacing");
+
             var secondRequest = new LlmTextRequest
             {
                 SystemPrompt = systemPrompt + "\n\nYou requested tools: " + string.Join(", ", requestedTools) + ". Call them directly now to retrieve the necessary info, and then return the final pacing JSON output.",
                 Messages = new List<ChatMessage> { ChatMessage.User(userMessage) },
                 EnforceJson = true,
-                Tools = SynapseToolRegistry.AllTools
-                    .Where(t => requestedTools.Contains(t.name))
-                    .Select(t => new GameToolDefinition
-                    {
-                        name = t.name,
-                        description = t.description,
-                        parameters = t.parameters
-                    }).ToList()
+                Tools = grantedTools
             };
 
             SynapseClient.SendTextAsync(
                 RimSynapseMod.ModHandle,
                 secondRequest,
-                new ChatOptions { queryId = "storyteller_pacing_pass2", priority = 1, requestName = "Storyteller Pacing Pass 2", targetName = "Colony" },
+                new ChatOptions { queryId = "storyteller_pacing_pass2", priority = 1, requestName = "Storyteller Pacing Pass 2", targetName = "Colony", toolScope = SynapseToolVocabulary.StorytellerScope },
                 secondResult =>
                 {
                     try
@@ -240,25 +238,20 @@ Provide the incident def name.";
         {
             RimSynapse.SynapseLogger.Message($"[RimSynapse-Core] Storyteller Event Selection requested tools: {string.Join(", ", requestedTools)}. Running second pass...");
 
+            var grantedTools = FilterToStorytellerVocabulary(requestedTools, "Event Selection");
+
             var secondRequest = new LlmTextRequest
             {
                 SystemPrompt = systemPrompt + "\n\nYou requested tools: " + string.Join(", ", requestedTools) + ". Call them directly now to retrieve the necessary info, and then return the final incident selection JSON.",
                 Messages = new List<ChatMessage> { ChatMessage.User(userMessage) },
                 EnforceJson = true,
-                Tools = SynapseToolRegistry.AllTools
-                    .Where(t => requestedTools.Contains(t.name))
-                    .Select(t => new GameToolDefinition
-                    {
-                        name = t.name,
-                        description = t.description,
-                        parameters = t.parameters
-                    }).ToList()
+                Tools = grantedTools
             };
 
             SynapseClient.SendTextAsync(
                 RimSynapseMod.ModHandle,
                 secondRequest,
-                new ChatOptions { queryId = "storyteller_event_selection_pass2", priority = 10, requestName = "Storyteller Event Selection Pass 2", targetName = category.defName },
+                new ChatOptions { queryId = "storyteller_event_selection_pass2", priority = 10, requestName = "Storyteller Event Selection Pass 2", targetName = category.defName, toolScope = SynapseToolVocabulary.StorytellerScope },
                 secondResult =>
                 {
                     try
@@ -283,6 +276,33 @@ Provide the incident def name.";
                     }
                 }
             );
+        }
+
+        /// <summary>
+        /// Intersect the model's requested tools with the storyteller vocabulary (Core #63)
+        /// and build the native tool definitions for the granted ones. Dropped requests are
+        /// logged in one line so an out-of-vocabulary ask is visible, not silent.
+        /// </summary>
+        private static List<GameToolDefinition> FilterToStorytellerVocabulary(List<string> requestedTools, string passName)
+        {
+            var dropped = requestedTools
+                .Where(n => !SynapseToolVocabulary.IsAllowed(SynapseToolVocabulary.StorytellerScope, n))
+                .ToList();
+            if (dropped.Count > 0)
+            {
+                RimSynapse.SynapseLogger.Message(
+                    $"[RimSynapse-Core] Storyteller {passName} requested tools outside the storyteller vocabulary — not granted: {string.Join(", ", dropped)}");
+            }
+
+            return SynapseToolRegistry.AllTools
+                .Where(t => requestedTools.Contains(t.name)
+                    && SynapseToolVocabulary.IsAllowed(SynapseToolVocabulary.StorytellerScope, t.name))
+                .Select(t => new GameToolDefinition
+                {
+                    name = t.name,
+                    description = t.description,
+                    parameters = t.parameters
+                }).ToList();
         }
 
         private static string BuildRecentEventsText(SynapseCoreWorldComponent coreComp)
