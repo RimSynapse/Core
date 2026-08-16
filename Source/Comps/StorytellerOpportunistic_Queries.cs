@@ -29,6 +29,12 @@ namespace RimSynapse.Comps
             var props = StorytellerComp_Storyteller.GetActiveStorytellerProps();
             string systemPrompt = BuildPacingSystemPrompt(props);
 
+            // Difficulty (ceiling + mood mandate) and personality ride every storyteller
+            // prompt (Core #66). Empty under a vanilla storyteller, but this path is already
+            // gated on our comp being present.
+            string agentContext = SynapseStorytellerContext.BuildAgentContext(map);
+            if (!string.IsNullOrEmpty(agentContext)) systemPrompt += "\n\n" + agentContext;
+
             string userMessage = $@"Colony Status:
 {metrics}
 
@@ -162,6 +168,11 @@ Analyze the situation and provide the PacingMultiplier and CategoryMultipliers."
             }
 
             string systemPrompt = BuildEventSelectionSystemPrompt(category, allowedIncidentsList, props);
+
+            // Difficulty (ceiling + mood mandate) and personality for the selector (Core #66):
+            // the ceiling is computed for the actual incident target, not just the current map.
+            string agentContext = SynapseStorytellerContext.BuildAgentContext(target ?? map);
+            if (!string.IsNullOrEmpty(agentContext)) systemPrompt += "\n\n" + agentContext;
 
             // Tell the selector that whatever it picks arrives on a delay (the deferred-news pipeline).
             string deferNote = SynapseDeferredNewsComponent.PromptNote();

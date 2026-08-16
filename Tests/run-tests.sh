@@ -54,6 +54,12 @@ run_suite vocabulary \
     Tests/ToolVocabularyTests.cs \
     $SRC/Comps/SynapseToolVocabulary.cs
 
+# The difficulty mood mandate (Core #66) is the pure slider→stance mapping.
+# Live gating and slider reads are Tier-2.
+run_suite mood \
+    Tests/DifficultyMoodTests.cs \
+    $SRC/Comps/SynapseDifficultyMood.cs
+
 echo
 if [ "$failures" -eq 0 ]; then
     echo "ALL SUITES PASSED"
