@@ -217,7 +217,11 @@ namespace RimSynapse
                 if (pawn.story.traits.HasTrait(traitDef))
                 {
                     var trait = pawn.story.traits.GetTrait(traitDef);
-                    pawn.story.traits.allTraits.Remove(trait);
+                    // Proper removal path: unsuppresses masked conflicts AND invalidates the cached
+                    // disabled-work/skill sets, so removing a work-disabling trait restores capability.
+                    pawn.story.traits.RemoveTrait(trait, true);
+                    pawn.Notify_DisabledWorkTypesChanged();
+                    pawn.skills?.Notify_SkillDisablesChanged();
                     return $"{{\"success\": true, \"message\": \"Successfully removed trait '{traitName}' from {pawnName}.\"}}";
                 }
                 return $"{{\"success\": false, \"reason\": \"{pawnName} does not have trait '{traitName}'.\"}}";

@@ -1,5 +1,5 @@
 [b]Discord Community:[/b] [url=https://discord.gg/eVBebZ2N9s]https://discord.gg/eVBebZ2N9s[/url]
-[b]Version:[/b] v0.7.1 (Target: RimWorld 1.6)
+[b]Version:[/b] v0.8.0 (Target: RimWorld 1.6)
 
 [h1]RimSynapse - Core[/h1]
 [b][url=https://github.com/RimSynapse/Core/wiki]Official Wiki and Documentation[/url][/b]
@@ -30,7 +30,6 @@ The LLM Direct Action Console acts as an AI-powered command center. You simply o
 
 [h2]Roadmap[/h2]
 [list]
-[*] [b]0.8 - Demographics, News and Narrative Voice:[/b] A deferred event pipeline that can hold, narrate and forecast letters and incidents through agentic flows, plus build-hygiene automation (Workshop-page verification, release gates run by tooling rather than by memory).
 [*] [b]0.9 - Factions and Living Societies:[/b] LLM-driven quest generation feeding the faction and world systems.
 [*] [b]0.10 - Cross-Mod Capability Passes:[/b] Coordinating another pass over what the whole set can do together.
 [*] [b]Localization and Hardening:[/b] Externalising every user-facing string so the framework and its modules can be translated.
@@ -39,6 +38,18 @@ These ship when they are ready - no dates.
 
 ---
 
+[h2]Changelog (v0.8.0) - Deferred Narrative, Pivotal Memory and Voice[/h2]
+[list]
+[*] NEW - Deferred event pipeline: letters and incidents can be held, narrated and forecast through agentic flows before they reach you, and generated letters are now grounded in your real colony and its factions instead of invented detail.
+[*] NEW - Pivotal life-events (recruited, arrested, captured, enslaved, converted, freed) are recorded as secured long-term memories that never decay, so a colonist remembers the moments that defined them.
+[*] NEW - Per-pawn narrative voice: Core stores each colonist's voice profile and a Kokoro voice catalog - the foundation companion mods use to give pawns a consistent spoken identity.
+[*] NEW - Skill-driven trait engine foundation: an axis model with wealth and reinforcement inputs, and a deterministic personality baseline drawn from a pawn's own backstory prose - present even when Psychology is not installed.
+[*] NEW - Cross-mod compatibility registry: every RimSynapse mod broadcasts a compatibility manifest and an API contract, and Core folds any version mismatch into a single clear warning instead of a silent break.
+[*] NEW - Formal cross-mod context injection points, so companion mods contribute narrative context at named, documented sites.
+[*] Changed: event episode coalescing - repeated events dedup into one episode carrying severity and who was involved, instead of a stream of near-identical letters.
+[*] Performance: colony wealth averages are cached per map per day, and the remote-hacking sub-tick early-outs when idle.
+[/list]
+
 [h2]Changelog (v0.7.1) - Weight-driven memory and evaluation[/h2]
 [list]
 [*] NEW - Memories now live on a single 0-1 importance scale, and short-term vs long-term is emergent: a memory becomes long-term once its relational salience - its links to other significant memories and people - crosses a threshold, not from a hardcoded type list.
@@ -46,14 +57,6 @@ These ship when they are ready - no dates.
 [*] NEW - Data-driven memory classes (MemoryClasses XML): per-type base weight, decay and consolidation are tunable by XPath, no recompile.
 [*] Changed: context now surfaces long-term and high-salience memories first, then fills with recent ones, instead of a flat top-5-by-weight.
 [*] Fixed: reinforcing a strong memory no longer crushed it (a weight-scale bug) - reinforcement now only ever raises a memory.
-[*] Added the trait-pressure data model behind Psychology's gradual, multi-day personality shifts. Old saves migrate silently.
-[/list]
-
-[h2]Changelog (v0.7.0) - Regions and Territories Compatibility[/h2]
-[list]
-[*] NEW - Load-order guard: a mod loaded before something it declares it must load after now reports one clear error at startup, instead of silently losing every type in its assembly and appearing installed while doing nothing.
-[*] Changed: every mod now targets .NET Framework 4.8, so any RimSynapse mod can reference any other. Previously a net472 mod could not, and the reference was dropped with only a build warning.
-[*] Changed: the metadata and wiki release gates now run automatically on every pull request, rather than when someone remembers to run them.
 [/list]
 [b]Full version history:[/b] [url=https://github.com/RimSynapse/Core/wiki/Changelog]github.com/RimSynapse/Core/wiki[/url]
 

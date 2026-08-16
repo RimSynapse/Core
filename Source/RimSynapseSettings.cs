@@ -201,6 +201,26 @@ namespace RimSynapse
         /// <summary>Maximum escalated runs per game session.</summary>
         public int escalationSessionCap = 10;
 
+        // --- Deferred news pipeline (0.8) ---
+        /// <summary>Master switch for the deferred-event pipeline. When on, news-worthy letters are
+        /// held for a delay and released later (the "news travels slowly on the rim" mechanic).</summary>
+        public bool deferNewsEnabled = true;
+
+        /// <summary>Default hold, in days, for events without a category override. Slider 0–5, default 2.</summary>
+        public float deferDaysDefault = 2f;
+
+        /// <summary>Hold for combat threats. Defaults to 0 (immediate) so raiders are never un-announced.</summary>
+        public float deferDaysThreat = 0f;
+
+        /// <summary>Hold for quest / opportunity offers. Defaults to the global 2 days.</summary>
+        public float deferDaysQuest = 2f;
+
+        /// <summary>
+        /// Fraction of non-player settlements that generate a flavor world-news event each in-game day
+        /// (WorldNews world-events system). 0.10 ≈ 5 events/day across ~50 settlements. 0 = off.
+        /// </summary>
+        public float worldNewsGenFraction = 0.10f;
+
         public override void ExposeData()
         {
             base.ExposeData();
@@ -216,6 +236,12 @@ namespace RimSynapse
             Scribe_Values.Look(ref enableEscalation, "enableEscalation", false);
             Scribe_Values.Look(ref escalationCooldownSeconds, "escalationCooldownSeconds", 120);
             Scribe_Values.Look(ref escalationSessionCap, "escalationSessionCap", 10);
+
+            Scribe_Values.Look(ref deferNewsEnabled, "deferNewsEnabled", true);
+            Scribe_Values.Look(ref deferDaysDefault, "deferDaysDefault", 2f);
+            Scribe_Values.Look(ref deferDaysThreat, "deferDaysThreat", 0f);
+            Scribe_Values.Look(ref deferDaysQuest, "deferDaysQuest", 2f);
+            Scribe_Values.Look(ref worldNewsGenFraction, "worldNewsGenFraction", 0.10f);
             
             Scribe_Values.Look(ref lmStudioUrl, "lmStudioUrl", "http://127.0.0.1:1234");
             Scribe_Values.Look(ref lmStudioApiKey, "lmStudioApiKey", "");

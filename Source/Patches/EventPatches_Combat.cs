@@ -68,10 +68,16 @@ namespace RimSynapse.Patches
 
             string category = isColonist ? "ColonistDeath" : (isPrisoner ? "PrisonerDeath" : "EnemyKilled");
 
+            var deathInvolved = new List<string>();
+            if (isColonist || isPrisoner) deathInvolved.Add(__instance.ThingID);
+            if (dinfo.HasValue && dinfo.Value.Instigator is Pawn killerPawn && killerPawn.IsColonist) deathInvolved.Add(killerPawn.ThingID);
+
             coreComp.EnqueuePastEvent(new PastEvent
             {
                 gameTick = GenTicks.TicksGame,
                 category = category,
+                severity = (isColonist || isPrisoner) ? EventSeverity.Major : EventSeverity.Standard,
+                involvedPawnIds = deathInvolved,
                 eventDescription = $"{__instance.Name?.ToStringShort ?? __instance.KindLabel} was killed{killerInfo}{hediffInfo}."
             });
 
@@ -110,6 +116,8 @@ namespace RimSynapse.Patches
             {
                 gameTick = GenTicks.TicksGame,
                 category = "ColonistDowned",
+                severity = EventSeverity.Serious,
+                involvedPawnIds = new List<string> { pawn.ThingID },
                 eventDescription = $"{pawn.Name?.ToStringShort ?? pawn.KindLabel} has been downed{reason}."
             });
         }
@@ -133,6 +141,8 @@ namespace RimSynapse.Patches
             {
                 gameTick = GenTicks.TicksGame,
                 category = "ColonistKidnapped",
+                severity = EventSeverity.Major,
+                involvedPawnIds = new List<string> { __instance.ThingID },
                 eventDescription = $"{__instance.Name?.ToStringShort ?? __instance.KindLabel} was kidnapped by {kidnapperName} of {factionName}."
             });
 

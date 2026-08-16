@@ -29,6 +29,9 @@ _Last run: 2 passed, 1 failed, 0 skipped — 2026-08-08 19:12._
 | ✅ PASS | negative | The daily evaluation calls a Bloodlust shift 'unlikely' (low likelihood). | Today contributes zero pressure — an unlikely day can never flip a trait. | pressure=0.00 |
 | ✅ PASS | positive | Genuine violence against the living recurs over three days. | Trait pressure accumulates across days and crosses the shift threshold. | day3 pressure=1.10 |
 | ✅ PASS | negative | A malformed/over-eager evaluation tries to add Psychopath. | The whitelist blocks it; only sanctioned traits may be added/removed. | whitelist enforced |
+| ✅ PASS | positive | WorldNews queries the R&T availability seam with R&T loaded | Detection reports active and the guarded worker reads R&T world state without throwing | R&T detected; seam read world state: "R&T active; 312 provinces, 279 with a listed owner." |
+| ✅ PASS | positive | A full expanded-issue LLM response is parsed through ParseIssue | Masthead, lead+secondary stories, sidebars and ads survive; image prompt captured, asset unresolved | Round-tripped: 2 stories, lead image-wanted, 1 sidebar(s), 1 ad(s) |
+| ✅ PASS | positive | A minimal response omitting masthead, sidebars, ads and images is parsed | Masthead is defaulted and collections are non-null; no exception | Sparse issue normalized: paper='The Rimworld Gazette', 1 story, no images |
 
-_Last run: 7 passed, 0 failed, 0 skipped — 2026-08-08 19:08._
+_Last run: 10 passed, 0 failed, 0 skipped — 2026-08-15 23:25._
 <!--/TIER:Execution-->

@@ -138,19 +138,23 @@ namespace RimSynapse
         public static void TickingUpdateHacks()
         {
             if (Current.ProgramState != ProgramState.Playing) return;
+            // #87: O(1) early-out when idle — nothing to expire and no cooldowns to clean. This ran
+            // every tick allocating two lists and reading TickManager even with zero active hacks.
+            if (ActiveHacks.Count == 0 && HackCooldowns.Count == 0) return;
+
             int currentTick = Find.TickManager.TicksGame;
 
-            // Update Active Hacks
-            var expiredHacks = new List<Thing>();
+            // Update Active Hacks (lazy allocation — only build the list when something actually expired).
+            List<Thing> expiredHacks = null;
             foreach (var kvp in ActiveHacks)
             {
                 if (currentTick >= kvp.Value)
                 {
-                    expiredHacks.Add(kvp.Key);
+                    (expiredHacks ?? (expiredHacks = new List<Thing>())).Add(kvp.Key);
                 }
             }
 
-            foreach (var thing in expiredHacks)
+            foreach (var thing in expiredHacks ?? System.Linq.Enumerable.Empty<Thing>())
             {
                 ActiveHacks.Remove(thing);
 
@@ -168,18 +172,21 @@ namespace RimSynapse
                 Messages.Message($"[RimSynapse] Hacking signal lost on {thing.LabelShort}. System offline for reboot cooldown (4h).", thing, MessageTypeDefOf.PositiveEvent, false);
             }
 
-            // Cleanup expired cooldowns to save memory
-            var expiredCooldowns = new List<Thing>();
+            // Cleanup expired cooldowns to save memory (lazy allocation as above).
+            List<Thing> expiredCooldowns = null;
             foreach (var kvp in HackCooldowns)
             {
                 if (currentTick >= kvp.Value)
                 {
-                    expiredCooldowns.Add(kvp.Key);
+                    (expiredCooldowns ?? (expiredCooldowns = new List<Thing>())).Add(kvp.Key);
                 }
             }
-            foreach (var thing in expiredCooldowns)
+            if (expiredCooldowns != null)
             {
-                HackCooldowns.Remove(thing);
+                foreach (var thing in expiredCooldowns)
+                {
+                    HackCooldowns.Remove(thing);
+                }
             }
         }
 

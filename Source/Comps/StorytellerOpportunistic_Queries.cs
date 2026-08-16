@@ -165,6 +165,10 @@ Analyze the situation and provide the PacingMultiplier and CategoryMultipliers."
 
             string systemPrompt = BuildEventSelectionSystemPrompt(category, allowedIncidentsList, props);
 
+            // Tell the selector that whatever it picks arrives on a delay (the deferred-news pipeline).
+            string deferNote = SynapseDeferredNewsComponent.PromptNote();
+            if (!string.IsNullOrEmpty(deferNote)) systemPrompt += "\n\n" + deferNote;
+
             string userMessage = $@"Colony Status:
 {metrics}
 
