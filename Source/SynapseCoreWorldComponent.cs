@@ -32,6 +32,10 @@ namespace RimSynapse
         private const int EpisodeMaxOpenTicks = 15000;  // ~6 in-game hours
         public List<FiredIncidentRecord> firedIncidentHistory = new List<FiredIncidentRecord>();
         public List<WealthRecord> wealthHistory = new List<WealthRecord>();
+        // Player↔storyteller chat log for the Core-owned chat window (Core #99). Player and
+        // Storyteller messages only — carries no colonist speaker. Migrated out of the Conversations
+        // world component so the window works even when Conversations is not installed.
+        public List<StorytellerChatMessage> storytellerChatHistory = new List<StorytellerChatMessage>();
         public RaidOutcomeRecord lastRaidOutcome;
         private int lastPurgeTick = -1;
         public string activeRaidEventId;
@@ -146,6 +150,7 @@ namespace RimSynapse
             Scribe_Collections.Look(ref raidRecruitedPawns, "raidRecruitedPawns", LookMode.Value, LookMode.Value);
             Scribe_Collections.Look(ref visitorEntryTicks, "visitorEntryTicks", LookMode.Value, LookMode.Value);
             Scribe_Collections.Look(ref wealthHistory, "wealthHistory", LookMode.Deep);
+            Scribe_Collections.Look(ref storytellerChatHistory, "storytellerChatHistory", LookMode.Deep);
             Scribe_Deep.Look(ref lastRaidOutcome, "lastRaidOutcome");
 
             if (Scribe.mode == LoadSaveMode.Saving)
@@ -162,6 +167,7 @@ namespace RimSynapse
                 if (backlogQueueList == null) backlogQueueList = new List<PastEvent>();
                 if (firedIncidentHistory == null) firedIncidentHistory = new List<FiredIncidentRecord>();
                 if (wealthHistory == null) wealthHistory = new List<WealthRecord>();
+                if (storytellerChatHistory == null) storytellerChatHistory = new List<StorytellerChatMessage>();
                 if (pawnEventRecords == null) pawnEventRecords = new List<PawnEventRecord>();
                 if (steleEventLinks == null) steleEventLinks = new Dictionary<string, string>();
                 
