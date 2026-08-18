@@ -71,5 +71,42 @@ namespace RimSynapse.Comps
 
             return weights.RandomElementByWeightWithFallback(kvp => kvp.Value, default).Key;
         }
+
+        /// <summary>
+        /// The guaranteed baseline (Core #67): a weighted-random pick among the CanFireNow-eligible
+        /// incidents of a category, using each incident's own baseChance scaled by any LLM-set
+        /// per-incident multiplier. This is what fires when the backend is unavailable, so a beat is
+        /// never silently lost and the colony is always fully playable. Returns null if nothing in
+        /// the category can fire right now (the beat then passes with no incident, exactly as vanilla
+        /// would when a roll finds no eligible candidate).
+        /// </summary>
+        public FiringIncident BuildVanillaFallback(IncidentCategoryDef category, IIncidentTarget target, SynapseCoreWorldComponent worldComp)
+        {
+            IncidentParms parms = StorytellerUtility.DefaultParmsNow(category, target);
+            var candidates = new List<(IncidentDef def, float weight)>();
+
+            foreach (var def in DefDatabase<IncidentDef>.AllDefsListForReading)
+            {
+                if (def.category != category) continue;
+
+                bool canFire;
+                try { canFire = def.Worker.CanFireNow(parms); }
+                catch { canFire = false; }
+                if (!canFire) continue;
+
+                float weight = def.baseChance;
+                if (worldComp != null) weight *= worldComp.GetIncidentMultiplier(def.defName);
+                if (weight <= 0f) continue;
+
+                candidates.Add((def, weight));
+            }
+
+            if (candidates.Count == 0) return null;
+
+            var pick = candidates.RandomElementByWeightWithFallback(c => c.weight, default);
+            if (pick.def == null) return null;
+
+            return new FiringIncident(pick.def, this, StorytellerUtility.DefaultParmsNow(pick.def.category, target));
+        }
     }
 }

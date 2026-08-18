@@ -151,9 +151,15 @@ Analyze the situation and provide the PacingMultiplier and CategoryMultipliers."
             if (Current.ProgramState != ProgramState.Playing || Find.CurrentMap == null) return;
 
             var map = Find.CurrentMap;
-            string metrics = GetColonyDetailedMetrics(map);
-            
+
             var coreWorldComp = Find.World.GetComponent<SynapseCoreWorldComponent>();
+
+            // Claim the single in-flight slot (#67). MakeIntervalIncidents already read it as free,
+            // but this is the atomic claim — and it also guards the training-telemetry caller, which
+            // does not pre-check. If a decision is somehow still pending, do not start another.
+            if (coreWorldComp != null && !coreWorldComp.TryBeginStorytellerDecision()) return;
+
+            string metrics = GetColonyDetailedMetrics(map);
             string recentEvents = BuildRecentEventsText(coreWorldComp);
 
             var props = StorytellerComp_Storyteller.GetActiveStorytellerProps();
@@ -201,11 +207,6 @@ Provide the incident def name.";
                 new ChatOptions { queryId = "storyteller_event_selection", priority = 10, requestName = "Storyteller Event Selection", targetName = category.defName },
                 result =>
                 {
-                    if (coreWorldComp != null)
-                    {
-                        coreWorldComp.GlobalPacingMultiplier = coreWorldComp.BasePacingMultiplier;
-                    }
-
                     bool runSecondPass = false;
                     try
                     {
@@ -236,8 +237,11 @@ Provide the incident def name.";
                     }
                     finally
                     {
+                        // The decision settles here unless it handed off to a second (tool) pass, which
+                        // owns the in-flight slot until it settles.
                         if (!runSecondPass)
                         {
+                            coreWorldComp?.EndStorytellerDecision();
                             ResumeAfterTelemetry();
                         }
                     }
@@ -283,6 +287,8 @@ Provide the incident def name.";
                     }
                     finally
                     {
+                        // The second (tool) pass owns the in-flight slot from the first pass; release it here (#67).
+                        Find.World?.GetComponent<SynapseCoreWorldComponent>()?.EndStorytellerDecision();
                         ResumeAfterTelemetry();
                     }
                 }

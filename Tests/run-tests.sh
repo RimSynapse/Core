@@ -60,6 +60,12 @@ run_suite mood \
     Tests/DifficultyMoodTests.cs \
     $SRC/Comps/SynapseDifficultyMood.cs
 
+# The storyteller decision gate (Core #67) is the pure "beat due?" + "may begin?" logic.
+# The live cadence source, async selection and vanilla fallback are Tier-2.
+run_suite decisiongate \
+    Tests/StorytellerDecisionGateTests.cs \
+    $SRC/Comps/StorytellerDecisionGate.cs
+
 echo
 if [ "$failures" -eq 0 ]; then
     echo "ALL SUITES PASSED"
