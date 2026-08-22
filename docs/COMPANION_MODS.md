@@ -219,3 +219,28 @@ Memory weight is a single **0.0–1.0** scale; short-term vs long-term is emerge
 - `consolidationContribution` — how strongly a memory of this class boosts a neighbour's salience (0–1 × its weight), which is what lets, e.g., a death promote linked chit-chat.
 
 When you create memories, populate `subjectPawnIds` with the pawn a memory is *about* so the salience graph can link it. Balance thresholds (consolidation, reference count, decay, trait-shift pressure) are exposed as mod settings and mirrored into Core statics, so players can retune without XML.
+
+## 12. The 0.9 storyteller and memory surfaces
+
+New extension points a companion mod can build against (all inert under a vanilla storyteller):
+
+*   **Contribute a storytelling verb**: `SynapseToolVocabulary.Add(SynapseToolVocabulary.StorytellerScope, "your_tool_name")`
+    after registering the tool. Verbs outside the scope are refused at the executor no matter
+    what the model asks for. Never grant a verb that edits pawns or objects by fiat.
+*   **Subscribe to incident lifecycle** (`SynapseIncidentLifecycle`): reflection-friendly,
+    primitive-only payloads — `OnIncidentStarted(kind, region, magnitude, origin, leadTimeTicks)`
+    and `OnIncidentResolved(kind, region, outcome)`. Resolve the type with
+    `GenTypes.GetTypeInAnyAssembly("RimSynapse.SynapseIncidentLifecycle")` so your mod builds
+    with Core absent. Resolution is deduped per incident instance.
+*   **Query world history** (`SynapseCoreWorldComponent`): `QueryWorldHistory(region, kind, sinceTick)`,
+    `OpenThreads()`, `WorldHistoryContextBlock()` — the canonical, save-backed record the
+    storyteller reasons over. Do not build your own parallel store; view over this one.
+*   **Record memories about pawns** (`SynapseCorePawnComp`): always use
+    `AddMemoryAbout(pawn(s), summary, type, weight, ...)` or key `subjectPawnIds` with
+    `MemoryPawnId(pawn)` (`GetUniqueLoadID`). Never push a hand-rolled `WeightedMemory` onto
+    `.memories` and never link pawns via `ThingID` tags — those memories are invisible to
+    relational consolidation.
+*   **Report in-process VRAM** (`SynapseClient.Gpu`): if your mod loads a model into VRAM inside
+    RimWorld's process, `UpsertConsumer(modId, label, vramMb, resident)` on load and
+    `RemoveConsumer(modId)` on dispose gives it its own line in GPU monitors instead of
+    inflating "System".

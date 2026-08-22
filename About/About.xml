@@ -4,7 +4,7 @@
     <author>RimSynapse Team</author>
     <packageId>RimSynapse.Core</packageId>
     <url>https://github.com/RimSynapse/Core</url>
-    <modVersion>0.8.0</modVersion>
+    <modVersion>0.9.0</modVersion>
     <supportedVersions>
         <li>1.5</li>
         <li>1.6</li>
@@ -30,7 +30,7 @@
     </incompatibleWith>
     <description>
 Discord Community: https://discord.gg/eVBebZ2N9s
-Version: v0.8.0 (Target: RimWorld 1.6)
+Version: v0.9.0 (Target: RimWorld 1.6)
 
 RimSynapse - Core
 Official Wiki and Documentation: https://github.com/RimSynapse/Core/wiki
@@ -41,6 +41,9 @@ RimSynapse Core is a powerful, asynchronous background engine that natively brin
 
 --- Features ---
 - LLM Direct Action Console (Command in Plain English!): Control the game world using natural language! Open the Direct Action Console, type what you want in plain English (e.g. "Make Fred have 20 Shooting, remove the Bipolar trait from Sarah, and start a fire on the solar generator"), and watch the Storyteller LLM act as an active agent, translating your request into native in-game tool calls and executing them in real-time!
+- Aura, the LLM Storyteller (0.9): with a RimSynapse storyteller selected, the AI chooses WHICH eligible incident fires - on the game's own schedule, inside your difficulty budget, with a full vanilla fallback when the backend is offline. Under Cassandra, Phoebe or Randy the game is completely stock.
+- Storyteller Chat (0.9): talk to Aura in a floating in-game chat window (with optional voice). The chat agent holds zero game-changing tools, and your messages never trigger events - she reads only a coarse mood signal, on her own schedule.
+- World History and Open Threads (0.9): regional events and their outcomes are recorded to a save-backed history the storyteller calls back to later.
 - Universal Backend Support: Connects seamlessly to LM Studio, Ollama, or any OpenAI-compatible local API. While RimSynapse's focus is on local models, with version 0.4.0, it is THE universal LLM connector!
 - Background Threading: Never drops a frame. All LLM requests are queued, processed, and sanitized asynchronously on separate threads.
 - Dynamic Priority Queue: Intelligently manages hundreds of requests with an advanced Linux-style top-monitor queue system, prioritizing critical events and starving obsolete prompts.
@@ -57,27 +60,20 @@ RimSynapse Core is a powerful, asynchronous background engine that natively brin
 AI is incredibly cool, and having a framework to utilize powerful, no-cost local models really appealed to me. RimWorld is relatively light on GPU overhead, making it the absolute perfect candidate to max out those graphics cards by running a local LLM in the background. My goal with RimSynapse is to push the boundaries of emergent storytelling using the hardware you already own.
 
 --- Roadmap ---
-0.9 - Factions and Living Societies: LLM-driven quest generation feeding the faction and world systems.
-0.10 - Cross-Mod Capability Passes: Coordinating another pass over what the whole set can do together.
-Localization and Hardening: Externalising every user-facing string so the framework and its modules can be translated.
+0.10 - Aura Persona and Foresight: the persona-def-driven storyteller voice, agentic narrate/forecast flows, and LLM-driven quest generation.
+0.11 - Localization and Hardening: externalising every user-facing string so the framework and its modules can be translated.
 These ship when they are ready - no dates.
 
---- Changelog (v0.8.0) - Deferred Narrative, Pivotal Memory and Voice ---
-- NEW - Deferred event pipeline: letters and incidents can be held, narrated and forecast through agentic flows before they reach you, and generated letters are now grounded in your real colony and its factions instead of invented detail.
-- NEW - Pivotal life-events (recruited, arrested, captured, enslaved, converted, freed) are recorded as secured long-term memories that never decay, so a colonist remembers the moments that defined them.
-- NEW - Per-pawn narrative voice: Core stores each colonist's voice profile and a Kokoro voice catalog - the foundation companion mods use to give pawns a consistent spoken identity.
-- NEW - Skill-driven trait engine foundation: an axis model with wealth and reinforcement inputs, and a deterministic personality baseline drawn from a pawn's own backstory prose - present even when Psychology is not installed.
-- NEW - Cross-mod compatibility registry: every RimSynapse mod broadcasts a compatibility manifest and an API contract, and Core folds any version mismatch into a single clear warning instead of a silent break.
-- NEW - Formal cross-mod context injection points, so companion mods contribute narrative context at named, documented sites.
-- Changed: event episode coalescing - repeated events dedup into one episode carrying severity and who was involved, instead of a stream of near-identical letters.
-- Performance: colony wealth averages are cached per map per day, and the remote-hacking sub-tick early-outs when idle.
-
---- Changelog (v0.7.1) - Weight-driven memory and evaluation ---
-- NEW - Memories now live on a single 0-1 importance scale, and short-term vs long-term is emergent: a memory becomes long-term once its relational salience - its links to other significant memories and people - crosses a threshold, not from a hardcoded type list.
-- NEW - Relational consolidation: idle chit-chat fades within a day or two, but chit-chat about someone who then dies is pulled up into long-term memory the day the death lands.
-- NEW - Data-driven memory classes (MemoryClasses XML): per-type base weight, decay and consolidation are tunable by XPath, no recompile.
-- Changed: context now surfaces long-term and high-salience memories first, then fills with recent ones, instead of a flat top-5-by-weight.
-- Fixed: reinforcing a strong memory no longer crushed it (a weight-scale bug) - reinforcement now only ever raises a memory.
+--- Changelog (v0.9.0) - The Aura Storyteller Engine ---
+- NEW - LLM-driven incident selection: the AI chooses WHICH eligible incident fires on the game's own deterministic cadence - it never rolls timing, only picks what. Backend offline falls back to the vanilla weighted roll, so the colony is always fully playable.
+- NEW - Storyteller tool vocabulary: a curated allowlist of storytelling verbs enforced at the executor boundary; god-mode tools are structurally unreachable and consequence verbs clamp to the difficulty budget.
+- NEW - Difficulty and personality context: your difficulty (including the custom threat-scale slider) reaches the storyteller as a hard points ceiling plus a mood mandate, alongside her personality profile.
+- NEW - Player-storyteller chat window (migrated from Conversations): storyteller-gated, save-backed, optional voice - works with or without Conversations installed.
+- NEW - Two agents, two scopes: the Chat agent holds zero consequence tools and player messages never trigger storyteller turns; only a typed mood signal - never your words - reaches the storyteller.
+- NEW - World history store with open threads the storyteller calls back to later; bounded so saves stay sane.
+- NEW - Regional-incident lifecycle hook: Core broadcasts incident start and first-level resolution for companion mods to react on their own terms.
+- NEW - Memory-linkage framework: one canonical pawn-id scheme, so chit-chat about a pawn truly consolidates with later events about them.
+- NEW - GpuStats in-process consumers channel: mods loading models into VRAM inside RimWorld's process (e.g. Local TTS) get their own line in the NVIDIA Tool's VRAM breakdown.
 
 Full version history: https://github.com/RimSynapse/Core/wiki/Changelog
 
