@@ -69,8 +69,9 @@ namespace RimSynapse.Patches
             string category = isColonist ? "ColonistDeath" : (isPrisoner ? "PrisonerDeath" : "EnemyKilled");
 
             var deathInvolved = new List<string>();
-            if (isColonist || isPrisoner) deathInvolved.Add(__instance.ThingID);
-            if (dinfo.HasValue && dinfo.Value.Instigator is Pawn killerPawn && killerPawn.IsColonist) deathInvolved.Add(killerPawn.ThingID);
+            var deathInvolvedLoadIds = new List<string>();
+            if (isColonist || isPrisoner) { deathInvolved.Add(__instance.ThingID); deathInvolvedLoadIds.Add(__instance.GetUniqueLoadID()); }
+            if (dinfo.HasValue && dinfo.Value.Instigator is Pawn killerPawn && killerPawn.IsColonist) { deathInvolved.Add(killerPawn.ThingID); deathInvolvedLoadIds.Add(killerPawn.GetUniqueLoadID()); }
 
             coreComp.EnqueuePastEvent(new PastEvent
             {
@@ -78,6 +79,7 @@ namespace RimSynapse.Patches
                 category = category,
                 severity = (isColonist || isPrisoner) ? EventSeverity.Major : EventSeverity.Standard,
                 involvedPawnIds = deathInvolved,
+                involvedPawnLoadIds = deathInvolvedLoadIds, // canonical ids for memory linkage (Core #80)
                 eventDescription = $"{__instance.Name?.ToStringShort ?? __instance.KindLabel} was killed{killerInfo}{hediffInfo}."
             });
 
@@ -118,6 +120,7 @@ namespace RimSynapse.Patches
                 category = "ColonistDowned",
                 severity = EventSeverity.Serious,
                 involvedPawnIds = new List<string> { pawn.ThingID },
+                involvedPawnLoadIds = new List<string> { pawn.GetUniqueLoadID() }, // Core #80
                 eventDescription = $"{pawn.Name?.ToStringShort ?? pawn.KindLabel} has been downed{reason}."
             });
         }
@@ -143,6 +146,7 @@ namespace RimSynapse.Patches
                 category = "ColonistKidnapped",
                 severity = EventSeverity.Major,
                 involvedPawnIds = new List<string> { __instance.ThingID },
+                involvedPawnLoadIds = new List<string> { __instance.GetUniqueLoadID() }, // Core #80
                 eventDescription = $"{__instance.Name?.ToStringShort ?? __instance.KindLabel} was kidnapped by {kidnapperName} of {factionName}."
             });
 

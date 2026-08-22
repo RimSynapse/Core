@@ -635,6 +635,39 @@ namespace RimSynapse.Comps
             return mem;
         }
 
+        /// <summary>
+        /// Record a memory about MULTIPLE pawns (e.g. an overheard exchange between two colonists),
+        /// linked to each via the canonical subject id and routed through the indexed AddMemory (Core #80).
+        /// </summary>
+        public WeightedMemory AddMemoryAbout(IEnumerable<Pawn> aboutPawns, string summary, string memoryType, float weight,
+            List<string> tags = null, bool isLongTerm = false, float decayRate = 0.1f)
+        {
+            int nowTick = Find.TickManager != null ? Find.TickManager.TicksGame : GenTicks.TicksGame;
+            var ids = new List<string>();
+            if (aboutPawns != null)
+                foreach (var p in aboutPawns)
+                {
+                    string id = MemoryPawnId(p);
+                    if (!string.IsNullOrEmpty(id) && !ids.Contains(id)) ids.Add(id);
+                }
+
+            var mem = new WeightedMemory
+            {
+                summary = summary,
+                memoryType = memoryType,
+                tags = tags ?? new List<string>(),
+                subjectPawnIds = ids,
+                gameTick = nowTick,
+                absTick = Utils.SynapseDateHelper.GameTickToAbsTick(nowTick),
+                weight = weight,
+                baseWeight = weight,
+                decayRate = decayRate,
+                isLongTerm = isLongTerm,
+            };
+            AddMemory(mem);
+            return mem;
+        }
+
         /// <summary>Remove a memory and unindex it (mirrors <see cref="AddMemory"/>). False if absent.</summary>
         public bool RemoveMemory(WeightedMemory memory)
         {
