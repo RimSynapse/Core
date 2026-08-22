@@ -403,15 +403,17 @@ embedded description is easy to forget precisely because it duplicates the Works
 `verify-metadata.ps1` fails when they disagree, when the description's changelog has no
 entry for the current version, or when About.xml stops being well-formed.
 
-- Companion repos **track** their DLLs (a cloned companion repo is a playable mod). The
-  hazard is source landing without a rebuild — Psychology shipped a source-only escalation
-  feature this way. `verify-binaries.ps1 -Build` fails when a committed DLL differs from a
-  fresh build of its own source.
-- Core does **not** track its DLLs (they attach to Releases), so its record is
-  `Assemblies/CHECKSUMS.sha256` — version, commit, and SHA256 per file. Regenerate it in
-  the release commit, attach the same DLLs as Release assets, and re-run
-  `verify-binaries.ps1` immediately before a Workshop upload to confirm the files on disk
-  are byte-for-byte the released build.
+- **Every repo tracks its built DLLs** (decided 2026-08-22, #95): a plain clone or a
+  GitHub release's source archive is immediately playable, which is what lets RimSort
+  install straight from GitHub for off-Steam testing. Core and R&T used to be
+  Release-asset-only; they are not anymore. The hazard is source landing without a
+  rebuild — Psychology shipped a source-only escalation feature this way.
+  `verify-binaries.ps1 -Build` fails when a committed DLL differs from a fresh build of
+  its own source.
+- Core additionally keeps `Assemblies/CHECKSUMS.sha256` — version, commit, and SHA256 per
+  file. Regenerate it in the release commit, attach the DLLs as Release assets as before,
+  and re-run `verify-binaries.ps1` immediately before a Workshop upload to confirm the
+  files on disk are byte-for-byte the released build.
 
 ## Branch discipline
 
@@ -429,5 +431,5 @@ entry for the current version, or when About.xml stops being well-formed.
   TestRunner) so a mid-sequence build is never broken.
 - `main` only via release promotion PRs — that gate is real, because it marks a release.
 - Versioning is `0.<iteration>.<minor>`; never plan or tag anything `1.0`.
-- Companion repos commit their built `Assemblies/*.dll`; Core does not (its DLLs
-  attach to GitHub Releases). `Source/obj/` is never tracked.
+- Every repo commits its built `Assemblies/*.dll` (Core's DLLs additionally attach to
+  GitHub Releases). `Source/obj/` is never tracked.
