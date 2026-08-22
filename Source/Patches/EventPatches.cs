@@ -89,6 +89,20 @@ namespace RimSynapse.Patches
 
             string defName = __instance.def?.defName ?? "unknown";
             coreComp.RegisterFiredIncident(defName);
+
+            // Regionalizable-incident lifecycle START hook (Core #64). Only Tier A–D environmental
+            // incidents emit a start; raids/infestations do not. Broadcast is contained.
+            var def = __instance.def;
+            string category = def?.category?.defName;
+            if (SynapseIncidentLifecycle.IsRegionalizable(def?.defName, category))
+            {
+                SynapseIncidentLifecycle.BroadcastStarted(
+                    def.defName,
+                    IncidentLifecycleRegion.Of(parms.target),
+                    parms.points,
+                    parms.faction?.Name ?? "",
+                    leadTimeTicks: 0);
+            }
         }
     }
 }

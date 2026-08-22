@@ -78,6 +78,12 @@ run_suite chatsentiment \
     Tests/ChatSentimentTests.cs \
     $SRC/Models/StorytellerChatSentiment.cs $SRC/Comps/SynapseToolVocabulary.cs
 
+# The regionalizable-incident lifecycle hook (Core #64): classification, resolution dedup and
+# fan-out/containment, all game-free. Live emit points (TryExecute / GameCondition.End) are Tier-2.
+run_suite incidentlifecycle \
+    Tests/IncidentLifecycleTests.cs \
+    $SRC/SynapseIncidentLifecycle.cs
+
 echo
 if [ "$failures" -eq 0 ]; then
     echo "ALL SUITES PASSED"
