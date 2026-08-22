@@ -68,6 +68,20 @@ namespace RimSynapse
             }
         }
 
+        /// <summary>
+        /// Remove a consumer by modId. Thread-safe. Reporting a non-resident consumer via
+        /// <see cref="UpsertConsumer"/> (0 VRAM) is the usual "model unloaded" signal; use this only
+        /// when a mod wants its row gone entirely (e.g. it is shutting down). No-op if absent.
+        /// </summary>
+        public void RemoveConsumer(string modId)
+        {
+            if (string.IsNullOrEmpty(modId)) return;
+            lock (_consumerLock)
+            {
+                consumers.RemoveAll(c => c.modId == modId);
+            }
+        }
+
         /// <summary>When the stats were last updated.</summary>
         public DateTime lastUpdated;
 

@@ -66,6 +66,12 @@ run_suite decisiongate \
     Tests/StorytellerDecisionGateTests.cs \
     $SRC/Comps/StorytellerDecisionGate.cs
 
+# The GpuStats in-process consumers channel (Core #104) is game-free: upsert-by-modId and
+# the resident→vram rule. Live registration/read is cross-mod (Local TTS / NVIDIA Tool).
+run_suite gpuconsumer \
+    Tests/GpuConsumerTests.cs \
+    $SRC/Models/GpuStats.cs
+
 echo
 if [ "$failures" -eq 0 ]; then
     echo "ALL SUITES PASSED"
