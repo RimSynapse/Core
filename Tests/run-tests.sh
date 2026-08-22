@@ -72,6 +72,12 @@ run_suite gpuconsumer \
     Tests/GpuConsumerTests.cs \
     $SRC/Models/GpuStats.cs
 
+# The two-agent Chat→Storyteller boundary (Core #68): the typed sentiment deriver and the
+# fail-closed chat scope, both game-free. Live wiring is Tier-2.
+run_suite chatsentiment \
+    Tests/ChatSentimentTests.cs \
+    $SRC/Models/StorytellerChatSentiment.cs $SRC/Comps/SynapseToolVocabulary.cs
+
 echo
 if [ "$failures" -eq 0 ]; then
     echo "ALL SUITES PASSED"

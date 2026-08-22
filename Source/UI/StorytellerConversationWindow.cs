@@ -190,7 +190,10 @@ namespace RimSynapse
             SynapseClient.ChatAsync(
                 RimSynapseMod.ModHandle,
                 apiMessages,
-                new ChatOptions { priority = 2, requestName = "Storyteller Direct Chat" },
+                // The Chat agent runs under the fail-closed chat scope (Core #68): it carries no
+                // tools, and even a hallucinated tool call is refused at the executor. A jailbroken
+                // Chat can be rude, not dangerous — isolation is capability, not prompt.
+                new ChatOptions { priority = 2, requestName = "Storyteller Direct Chat", toolScope = SynapseToolVocabulary.ChatScope },
                 result =>
                 {
                     if (result.success && !string.IsNullOrEmpty(result.content))

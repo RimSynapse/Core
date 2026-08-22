@@ -26,6 +26,15 @@ namespace RimSynapse
         /// <summary>The Storyteller agent's scope: storytelling verbs only (Core #63).</summary>
         public const string StorytellerScope = "storyteller";
 
+        /// <summary>
+        /// The player-facing Chat agent's scope (Core #68): defined but empty, so it fails closed —
+        /// no consequence tool can execute under it, no matter what the model is persuaded to emit.
+        /// Isolation rests on capability, not the prompt: a jailbroken Chat can be rude, not
+        /// dangerous. Chat never ingests raw player text into the Storyteller; only a typed sentiment
+        /// signal crosses that boundary (see <see cref="StorytellerChatSentiment"/>).
+        /// </summary>
+        public const string ChatScope = "chat";
+
         private static readonly Dictionary<string, HashSet<string>> _scopes =
             new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 
@@ -67,6 +76,10 @@ namespace RimSynapse
                 // the edge is a beat. Both clamp to the difficulty budget.
                 "fire_incident",
                 "trigger_colonist_break");
+
+            // The Chat scope is defined with NO tools: it exists (so it is not "unscoped =
+            // everything") yet permits nothing, so IsAllowed(ChatScope, anyTool) is always false.
+            Define(ChatScope);
         }
 
         /// <summary>Define (or redefine) a scope as exactly the given tool names.</summary>

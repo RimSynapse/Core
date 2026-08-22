@@ -35,6 +35,11 @@ namespace RimSynapse.Comps
             string agentContext = SynapseStorytellerContext.BuildAgentContext(map);
             if (!string.IsNullOrEmpty(agentContext)) systemPrompt += "\n\n" + agentContext;
 
+            // The Storyteller reads the shared chat log as read-only, TYPED sentiment on its own
+            // cadence beat (Core #68) — never the player's raw words, which stay in the Chat agent.
+            string pacingSentiment = BuildChatSentimentNote(coreComp);
+            if (!string.IsNullOrEmpty(pacingSentiment)) systemPrompt += "\n\n" + pacingSentiment;
+
             string userMessage = $@"Colony Status:
 {metrics}
 
@@ -184,6 +189,10 @@ Analyze the situation and provide the PacingMultiplier and CategoryMultipliers."
             string deferNote = SynapseDeferredNewsComponent.PromptNote();
             if (!string.IsNullOrEmpty(deferNote)) systemPrompt += "\n\n" + deferNote;
 
+            // Typed player-chat sentiment as read-only input to the selection beat (Core #68).
+            string selectionSentiment = BuildChatSentimentNote(coreWorldComp);
+            if (!string.IsNullOrEmpty(selectionSentiment)) systemPrompt += "\n\n" + selectionSentiment;
+
             string userMessage = $@"Colony Status:
 {metrics}
 
@@ -320,6 +329,19 @@ Provide the incident def name.";
                     description = t.description,
                     parameters = t.parameters
                 }).ToList();
+        }
+
+        /// <summary>
+        /// Reduce the shared player↔storyteller chat log to a compact TYPED sentiment note for the
+        /// Storyteller's prompt (Core #68). Only the player's messages are classified, and only the
+        /// typed flags cross — never the raw text. Empty when there is no chat or no signal.
+        /// </summary>
+        private static string BuildChatSentimentNote(SynapseCoreWorldComponent worldComp)
+        {
+            var log = worldComp?.storytellerChatHistory;
+            if (log == null || log.Count == 0) return string.Empty;
+            var playerMessages = log.Where(m => m.sender == "Player").Select(m => m.message);
+            return StorytellerChatSentiment.Derive(playerMessages).ToPromptLine();
         }
 
         private static string BuildRecentEventsText(SynapseCoreWorldComponent coreComp)
