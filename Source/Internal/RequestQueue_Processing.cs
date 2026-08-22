@@ -186,7 +186,7 @@ namespace RimSynapse.Internal
 
                 foreach (var tc in initialChatResult.toolCalls)
                 {
-                    string toolOutput = ExecuteToolOnMainThread(tc.function.name, tc.function.arguments);
+                    string toolOutput = ExecuteToolOnMainThread(tc.function.name, tc.function.arguments, req.Options?.toolScope);
                     var toolResponseMsg = ChatMessage.Tool(toolOutput, tc.id);
                     toolResponseMsg.name = tc.function.name;
                     textReq.Messages.Add(toolResponseMsg);
@@ -405,7 +405,7 @@ namespace RimSynapse.Internal
             }
         }
 
-        private static string ExecuteToolOnMainThread(string name, string arguments)
+        private static string ExecuteToolOnMainThread(string name, string arguments, string toolScope)
         {
             string output = null;
             var resetEvent = new AutoResetEvent(false);
@@ -414,7 +414,10 @@ namespace RimSynapse.Internal
             {
                 try
                 {
-                    output = SynapseToolRegistry.ExecuteTool(name, arguments);
+                    // The scope must ride into the main-thread closure explicitly: the
+                    // registry's ambient scope is per-thread and this callback does not
+                    // run on the requester's thread.
+                    output = SynapseToolRegistry.ExecuteTool(name, arguments, true, toolScope);
                 }
                 catch (Exception ex)
                 {

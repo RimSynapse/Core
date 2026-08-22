@@ -48,6 +48,24 @@ run_suite deferred \
     Tests/DeferredEventTests.cs \
     $SRC/SynapseDeferredEventPipeline.cs
 
+# The tool vocabulary (Core #63) is game-free by design: the allowlist and the
+# difficulty clamp compile with no stubs. Executor enforcement is Tier-2.
+run_suite vocabulary \
+    Tests/ToolVocabularyTests.cs \
+    $SRC/Comps/SynapseToolVocabulary.cs
+
+# The difficulty mood mandate (Core #66) is the pure slider→stance mapping.
+# Live gating and slider reads are Tier-2.
+run_suite mood \
+    Tests/DifficultyMoodTests.cs \
+    $SRC/Comps/SynapseDifficultyMood.cs
+
+# The storyteller decision gate (Core #67) is the pure "beat due?" + "may begin?" logic.
+# The live cadence source, async selection and vanilla fallback are Tier-2.
+run_suite decisiongate \
+    Tests/StorytellerDecisionGateTests.cs \
+    $SRC/Comps/StorytellerDecisionGate.cs
+
 echo
 if [ "$failures" -eq 0 ]; then
     echo "ALL SUITES PASSED"

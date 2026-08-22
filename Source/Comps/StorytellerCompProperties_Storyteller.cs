@@ -49,6 +49,11 @@ namespace RimSynapse.Comps
         public string characterName = "AI Storyteller";
         public string speakingStyle = "sassy, dramatic, or menacing";
 
+        // The persona prose injected into both Storyteller and Chat context (Core #66) —
+        // who this storyteller is, beyond a name and a style line. Multi-line XML text;
+        // null means only name/style are injected. The full voice bible is Core #89 (0.10).
+        public string personalityProfile;
+
         // Base Category Weights
         public float baseWeightThreatBig = 2.0f;
         public float baseWeightThreatSmall = 1.0f;

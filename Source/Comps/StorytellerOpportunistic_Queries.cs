@@ -29,6 +29,12 @@ namespace RimSynapse.Comps
             var props = StorytellerComp_Storyteller.GetActiveStorytellerProps();
             string systemPrompt = BuildPacingSystemPrompt(props);
 
+            // Difficulty (ceiling + mood mandate) and personality ride every storyteller
+            // prompt (Core #66). Empty under a vanilla storyteller, but this path is already
+            // gated on our comp being present.
+            string agentContext = SynapseStorytellerContext.BuildAgentContext(map);
+            if (!string.IsNullOrEmpty(agentContext)) systemPrompt += "\n\n" + agentContext;
+
             string userMessage = $@"Colony Status:
 {metrics}
 
@@ -97,25 +103,23 @@ Analyze the situation and provide the PacingMultiplier and CategoryMultipliers."
         {
             RimSynapse.SynapseLogger.Message($"[RimSynapse-Core] Storyteller Pacing requested tools: {string.Join(", ", requestedTools)}. Running second pass...");
 
+            // The storyteller runs on the storyteller vocabulary (Core #63): a requested
+            // tool outside it is not offered — and even an hallucinated call would be
+            // refused at the executor, because toolScope rides the request options.
+            var grantedTools = FilterToStorytellerVocabulary(requestedTools, "Pacing");
+
             var secondRequest = new LlmTextRequest
             {
                 SystemPrompt = systemPrompt + "\n\nYou requested tools: " + string.Join(", ", requestedTools) + ". Call them directly now to retrieve the necessary info, and then return the final pacing JSON output.",
                 Messages = new List<ChatMessage> { ChatMessage.User(userMessage) },
                 EnforceJson = true,
-                Tools = SynapseToolRegistry.AllTools
-                    .Where(t => requestedTools.Contains(t.name))
-                    .Select(t => new GameToolDefinition
-                    {
-                        name = t.name,
-                        description = t.description,
-                        parameters = t.parameters
-                    }).ToList()
+                Tools = grantedTools
             };
 
             SynapseClient.SendTextAsync(
                 RimSynapseMod.ModHandle,
                 secondRequest,
-                new ChatOptions { queryId = "storyteller_pacing_pass2", priority = 1, requestName = "Storyteller Pacing Pass 2", targetName = "Colony" },
+                new ChatOptions { queryId = "storyteller_pacing_pass2", priority = 1, requestName = "Storyteller Pacing Pass 2", targetName = "Colony", toolScope = SynapseToolVocabulary.StorytellerScope },
                 secondResult =>
                 {
                     try
@@ -147,9 +151,15 @@ Analyze the situation and provide the PacingMultiplier and CategoryMultipliers."
             if (Current.ProgramState != ProgramState.Playing || Find.CurrentMap == null) return;
 
             var map = Find.CurrentMap;
-            string metrics = GetColonyDetailedMetrics(map);
-            
+
             var coreWorldComp = Find.World.GetComponent<SynapseCoreWorldComponent>();
+
+            // Claim the single in-flight slot (#67). MakeIntervalIncidents already read it as free,
+            // but this is the atomic claim — and it also guards the training-telemetry caller, which
+            // does not pre-check. If a decision is somehow still pending, do not start another.
+            if (coreWorldComp != null && !coreWorldComp.TryBeginStorytellerDecision()) return;
+
+            string metrics = GetColonyDetailedMetrics(map);
             string recentEvents = BuildRecentEventsText(coreWorldComp);
 
             var props = StorytellerComp_Storyteller.GetActiveStorytellerProps();
@@ -164,6 +174,11 @@ Analyze the situation and provide the PacingMultiplier and CategoryMultipliers."
             }
 
             string systemPrompt = BuildEventSelectionSystemPrompt(category, allowedIncidentsList, props);
+
+            // Difficulty (ceiling + mood mandate) and personality for the selector (Core #66):
+            // the ceiling is computed for the actual incident target, not just the current map.
+            string agentContext = SynapseStorytellerContext.BuildAgentContext(target ?? map);
+            if (!string.IsNullOrEmpty(agentContext)) systemPrompt += "\n\n" + agentContext;
 
             // Tell the selector that whatever it picks arrives on a delay (the deferred-news pipeline).
             string deferNote = SynapseDeferredNewsComponent.PromptNote();
@@ -192,11 +207,6 @@ Provide the incident def name.";
                 new ChatOptions { queryId = "storyteller_event_selection", priority = 10, requestName = "Storyteller Event Selection", targetName = category.defName },
                 result =>
                 {
-                    if (coreWorldComp != null)
-                    {
-                        coreWorldComp.GlobalPacingMultiplier = coreWorldComp.BasePacingMultiplier;
-                    }
-
                     bool runSecondPass = false;
                     try
                     {
@@ -227,8 +237,11 @@ Provide the incident def name.";
                     }
                     finally
                     {
+                        // The decision settles here unless it handed off to a second (tool) pass, which
+                        // owns the in-flight slot until it settles.
                         if (!runSecondPass)
                         {
+                            coreWorldComp?.EndStorytellerDecision();
                             ResumeAfterTelemetry();
                         }
                     }
@@ -240,25 +253,20 @@ Provide the incident def name.";
         {
             RimSynapse.SynapseLogger.Message($"[RimSynapse-Core] Storyteller Event Selection requested tools: {string.Join(", ", requestedTools)}. Running second pass...");
 
+            var grantedTools = FilterToStorytellerVocabulary(requestedTools, "Event Selection");
+
             var secondRequest = new LlmTextRequest
             {
                 SystemPrompt = systemPrompt + "\n\nYou requested tools: " + string.Join(", ", requestedTools) + ". Call them directly now to retrieve the necessary info, and then return the final incident selection JSON.",
                 Messages = new List<ChatMessage> { ChatMessage.User(userMessage) },
                 EnforceJson = true,
-                Tools = SynapseToolRegistry.AllTools
-                    .Where(t => requestedTools.Contains(t.name))
-                    .Select(t => new GameToolDefinition
-                    {
-                        name = t.name,
-                        description = t.description,
-                        parameters = t.parameters
-                    }).ToList()
+                Tools = grantedTools
             };
 
             SynapseClient.SendTextAsync(
                 RimSynapseMod.ModHandle,
                 secondRequest,
-                new ChatOptions { queryId = "storyteller_event_selection_pass2", priority = 10, requestName = "Storyteller Event Selection Pass 2", targetName = category.defName },
+                new ChatOptions { queryId = "storyteller_event_selection_pass2", priority = 10, requestName = "Storyteller Event Selection Pass 2", targetName = category.defName, toolScope = SynapseToolVocabulary.StorytellerScope },
                 secondResult =>
                 {
                     try
@@ -279,10 +287,39 @@ Provide the incident def name.";
                     }
                     finally
                     {
+                        // The second (tool) pass owns the in-flight slot from the first pass; release it here (#67).
+                        Find.World?.GetComponent<SynapseCoreWorldComponent>()?.EndStorytellerDecision();
                         ResumeAfterTelemetry();
                     }
                 }
             );
+        }
+
+        /// <summary>
+        /// Intersect the model's requested tools with the storyteller vocabulary (Core #63)
+        /// and build the native tool definitions for the granted ones. Dropped requests are
+        /// logged in one line so an out-of-vocabulary ask is visible, not silent.
+        /// </summary>
+        private static List<GameToolDefinition> FilterToStorytellerVocabulary(List<string> requestedTools, string passName)
+        {
+            var dropped = requestedTools
+                .Where(n => !SynapseToolVocabulary.IsAllowed(SynapseToolVocabulary.StorytellerScope, n))
+                .ToList();
+            if (dropped.Count > 0)
+            {
+                RimSynapse.SynapseLogger.Message(
+                    $"[RimSynapse-Core] Storyteller {passName} requested tools outside the storyteller vocabulary — not granted: {string.Join(", ", dropped)}");
+            }
+
+            return SynapseToolRegistry.AllTools
+                .Where(t => requestedTools.Contains(t.name)
+                    && SynapseToolVocabulary.IsAllowed(SynapseToolVocabulary.StorytellerScope, t.name))
+                .Select(t => new GameToolDefinition
+                {
+                    name = t.name,
+                    description = t.description,
+                    parameters = t.parameters
+                }).ToList();
         }
 
         private static string BuildRecentEventsText(SynapseCoreWorldComponent coreComp)

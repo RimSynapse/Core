@@ -66,22 +66,13 @@ namespace RimSynapse.Comps
 
         private static string GetToolsTextList()
         {
-            int maxBudget = RimSynapseMod.Instance?.Settings?.maxPacingContextTokens ?? 4096;
-            bool limitTools = maxBudget <= 8192;
-
-            var allowedTools = new HashSet<string>
-            {
-                "get_colonists_profile",
-                "get_stockpile_details",
-                "get_active_threats",
-                "get_colony_moods",
-                "get_faction_relations_history"
-            };
-
+            // The prompt's tool list IS the enforced list: the storyteller vocabulary
+            // (Core #63). The old behaviour listed every registered tool once the token
+            // budget was large enough, which advertised tools the executor now refuses.
             var list = new List<string>();
             foreach (var tool in SynapseToolRegistry.NonDebugTools)
             {
-                if (!limitTools || allowedTools.Contains(tool.name))
+                if (SynapseToolVocabulary.IsAllowed(SynapseToolVocabulary.StorytellerScope, tool.name))
                 {
                     list.Add($"- '{tool.name}': {tool.description}");
                 }
