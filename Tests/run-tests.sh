@@ -84,6 +84,12 @@ run_suite incidentlifecycle \
     Tests/IncidentLifecycleTests.cs \
     $SRC/SynapseIncidentLifecycle.cs
 
+# The world-history store's eviction policy (Core #65): bounded, keeps open threads over resolved
+# history. Game-free. Live persistence/query/surfacing is Tier-2.
+run_suite worldhistory \
+    Tests/WorldHistoryCurationTests.cs \
+    $SRC/WorldHistoryCuration.cs
+
 echo
 if [ "$failures" -eq 0 ]; then
     echo "ALL SUITES PASSED"

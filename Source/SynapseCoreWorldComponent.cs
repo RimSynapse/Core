@@ -151,6 +151,7 @@ namespace RimSynapse
             Scribe_Collections.Look(ref visitorEntryTicks, "visitorEntryTicks", LookMode.Value, LookMode.Value);
             Scribe_Collections.Look(ref wealthHistory, "wealthHistory", LookMode.Deep);
             Scribe_Collections.Look(ref storytellerChatHistory, "storytellerChatHistory", LookMode.Deep);
+            Scribe_Collections.Look(ref worldHistory, "worldHistory", LookMode.Deep);
             Scribe_Deep.Look(ref lastRaidOutcome, "lastRaidOutcome");
 
             if (Scribe.mode == LoadSaveMode.Saving)
@@ -168,6 +169,7 @@ namespace RimSynapse
                 if (firedIncidentHistory == null) firedIncidentHistory = new List<FiredIncidentRecord>();
                 if (wealthHistory == null) wealthHistory = new List<WealthRecord>();
                 if (storytellerChatHistory == null) storytellerChatHistory = new List<StorytellerChatMessage>();
+                if (worldHistory == null) worldHistory = new List<WorldHistoryEntry>();
                 if (pawnEventRecords == null) pawnEventRecords = new List<PawnEventRecord>();
                 if (steleEventLinks == null) steleEventLinks = new Dictionary<string, string>();
                 

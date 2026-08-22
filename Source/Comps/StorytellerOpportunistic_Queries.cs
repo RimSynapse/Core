@@ -193,6 +193,10 @@ Analyze the situation and provide the PacingMultiplier and CategoryMultipliers."
             string selectionSentiment = BuildChatSentimentNote(coreWorldComp);
             if (!string.IsNullOrEmpty(selectionSentiment)) systemPrompt += "\n\n" + selectionSentiment;
 
+            // Open world-history threads the storyteller can call back to (Core #65).
+            string openThreads = coreWorldComp?.WorldHistoryContextBlock();
+            if (!string.IsNullOrEmpty(openThreads)) systemPrompt += "\n\n" + openThreads;
+
             string userMessage = $@"Colony Status:
 {metrics}
 
