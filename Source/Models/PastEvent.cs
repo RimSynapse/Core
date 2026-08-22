@@ -30,6 +30,15 @@ namespace RimSynapse.Models
         public System.Collections.Generic.List<string> witnessPawnIds = new System.Collections.Generic.List<string>();
         public System.Collections.Generic.List<string> afterEffectPawnIds = new System.Collections.Generic.List<string>();
 
+        /// <summary>
+        /// Canonical GetUniqueLoadID for the involved pawns (Core #80), captured when the pawn is
+        /// still referenceable (e.g. at death). Memory producers key <c>subjectPawnIds</c> off THIS —
+        /// the same scheme as the social network and therapy memories — so relational consolidation
+        /// can connect memories about the same pawn. Kept parallel to (not a replacement for)
+        /// <see cref="involvedPawnIds"/>, which stays ThingID because #88 episode coalescing keys on it.
+        /// </summary>
+        public System.Collections.Generic.List<string> involvedPawnLoadIds = new System.Collections.Generic.List<string>();
+
         /// <summary>Stable per-episode identity used to coalesce repeats of the same ordeal.</summary>
         public string CoalesceKey => !string.IsNullOrEmpty(mcpTag) ? mcpTag : (category ?? "event");
 
@@ -85,12 +94,14 @@ namespace RimSynapse.Models
             Scribe_Collections.Look(ref involvedPawnIds, "involvedPawnIds", LookMode.Value);
             Scribe_Collections.Look(ref witnessPawnIds, "witnessPawnIds", LookMode.Value);
             Scribe_Collections.Look(ref afterEffectPawnIds, "afterEffectPawnIds", LookMode.Value);
+            Scribe_Collections.Look(ref involvedPawnLoadIds, "involvedPawnLoadIds", LookMode.Value);
 
             if (Scribe.mode == LoadSaveMode.LoadingVars)
             {
                 if (pawnSnapshots == null) pawnSnapshots = new System.Collections.Generic.Dictionary<string, string>();
                 if (string.IsNullOrEmpty(eventId)) eventId = System.Guid.NewGuid().ToString();
                 if (involvedPawnIds == null) involvedPawnIds = new System.Collections.Generic.List<string>();
+                if (involvedPawnLoadIds == null) involvedPawnLoadIds = new System.Collections.Generic.List<string>();
                 if (witnessPawnIds == null) witnessPawnIds = new System.Collections.Generic.List<string>();
                 if (afterEffectPawnIds == null) afterEffectPawnIds = new System.Collections.Generic.List<string>();
             }

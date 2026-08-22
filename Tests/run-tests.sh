@@ -48,6 +48,48 @@ run_suite deferred \
     Tests/DeferredEventTests.cs \
     $SRC/SynapseDeferredEventPipeline.cs
 
+# The tool vocabulary (Core #63) is game-free by design: the allowlist and the
+# difficulty clamp compile with no stubs. Executor enforcement is Tier-2.
+run_suite vocabulary \
+    Tests/ToolVocabularyTests.cs \
+    $SRC/Comps/SynapseToolVocabulary.cs
+
+# The difficulty mood mandate (Core #66) is the pure slider→stance mapping.
+# Live gating and slider reads are Tier-2.
+run_suite mood \
+    Tests/DifficultyMoodTests.cs \
+    $SRC/Comps/SynapseDifficultyMood.cs
+
+# The storyteller decision gate (Core #67) is the pure "beat due?" + "may begin?" logic.
+# The live cadence source, async selection and vanilla fallback are Tier-2.
+run_suite decisiongate \
+    Tests/StorytellerDecisionGateTests.cs \
+    $SRC/Comps/StorytellerDecisionGate.cs
+
+# The GpuStats in-process consumers channel (Core #104) is game-free: upsert-by-modId and
+# the resident→vram rule. Live registration/read is cross-mod (Local TTS / NVIDIA Tool).
+run_suite gpuconsumer \
+    Tests/GpuConsumerTests.cs \
+    $SRC/Models/GpuStats.cs
+
+# The two-agent Chat→Storyteller boundary (Core #68): the typed sentiment deriver and the
+# fail-closed chat scope, both game-free. Live wiring is Tier-2.
+run_suite chatsentiment \
+    Tests/ChatSentimentTests.cs \
+    $SRC/Models/StorytellerChatSentiment.cs $SRC/Comps/SynapseToolVocabulary.cs
+
+# The regionalizable-incident lifecycle hook (Core #64): classification, resolution dedup and
+# fan-out/containment, all game-free. Live emit points (TryExecute / GameCondition.End) are Tier-2.
+run_suite incidentlifecycle \
+    Tests/IncidentLifecycleTests.cs \
+    $SRC/SynapseIncidentLifecycle.cs
+
+# The world-history store's eviction policy (Core #65): bounded, keeps open threads over resolved
+# history. Game-free. Live persistence/query/surfacing is Tier-2.
+run_suite worldhistory \
+    Tests/WorldHistoryCurationTests.cs \
+    $SRC/WorldHistoryCuration.cs
+
 echo
 if [ "$failures" -eq 0 ]; then
     echo "ALL SUITES PASSED"

@@ -88,6 +88,17 @@ namespace RimSynapse
         /// </summary>
         public static List<string> Validate(SynapseScript script, Action<string> log)
         {
+            return Validate(script, log, toolScope: null);
+        }
+
+        /// <summary>
+        /// Validate a script under a tool-vocabulary scope (Core #63). A step whose verb is
+        /// outside the scope is a hard rejection error — the scope is a capability boundary,
+        /// so it belongs with the structural checks, not the warn-only argument checks.
+        /// Null scope skips the vocabulary check (unscoped, pre-existing behaviour).
+        /// </summary>
+        public static List<string> Validate(SynapseScript script, Action<string> log, string toolScope)
+        {
             var errors = new List<string>();
             if (script?.steps == null) return errors;
 
@@ -121,6 +132,14 @@ namespace RimSynapse
                     CheckUnknownFields(errors, n, "call_tool", args, CallToolFields);
                     if (args == null || !args.TryGetValue("tool", out var toolName) || string.IsNullOrEmpty(toolName?.ToString()))
                         errors.Add($"Step {n} (call_tool): missing required field 'tool'.");
+                    else if (!SynapseToolVocabulary.IsAllowed(toolScope, toolName.ToString()))
+                        errors.Add($"Step {n} (call_tool): tool '{toolName}' is not in the '{toolScope}' vocabulary.");
+                    continue;
+                }
+
+                if (!SynapseToolVocabulary.IsAllowed(toolScope, step.type))
+                {
+                    errors.Add($"Step {n}: tool '{step.type}' is not in the '{toolScope}' vocabulary.");
                     continue;
                 }
 

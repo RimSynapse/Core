@@ -81,6 +81,15 @@ namespace RimSynapse
                     // can't know real candidate ids; live tests use the debug injectors for that path.
                     mockContent = "{\n  \"Headline\": \"Holding steady.\",\n  \"State\": \"Mood stable, no break risk.\",\n  \"Trajectory\": \"stable\",\n  \"Temperament\": \"Pragmatic and even.\",\n  \"Bonds\": \"A few close ties.\",\n  \"Drives\": \"Survival and craft.\",\n  \"AbandonmentRiskScore\": 10,\n  \"PersonalityShiftLikelihood\": \"low\",\n  \"TraitJudgment\": [],\n  \"SocialAdjustments\": {}\n}";
                 }
+                else if (sysMsgLower.Contains("attending a ceremony"))
+                {
+                    // Ceremony / funeral record (Psychology's FuneralResponse schema). Without this case the
+                    // ceremony prompt fell through to the bare {"success": true}, so overallRecord/eulogies/
+                    // comments were all empty — the record was correctly skipped, and the funeral autotest
+                    // (SynapsePsychologyWorldComponent) failed because no record was ever saved. A non-empty
+                    // record here exercises the real save path so that autotest can pass.
+                    mockContent = "{\n  \"overallRecord\": \"The colony gathered beneath a grey sky to mark the passing. Words were spoken, heads were bowed, and for a moment the endless work of survival paused.\",\n  \"eulogies\": [\n    { \"speaker\": \"A mourner\", \"text\": \"They were steady when it counted. We are the lesser for the loss.\" }\n  ],\n  \"comments\": [\n    { \"commenter\": \"An attendee\", \"text\": \"It was a fitting sending-off.\" }\n  ],\n  \"pawnMemories\": {}\n}";
+                }
                 else if (sysMsgLower.Contains("childhood") || userMsgLower.Contains("childhood"))
                 {
                     mockContent = "{\n  \"Memory\": \"I spent my childhood digging trenches and learning the names of wild plants. My hands were always calloused, but I found peace in the quiet woods.\",\n  \"Hometown\": \"Kharstead\",\n  \"Tags\": [\"Origin\", \"Childhood\", \"Plants\"],\n  \"EmotionalTone\": \"neutral\"\n}";

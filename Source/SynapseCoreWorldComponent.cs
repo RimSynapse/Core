@@ -32,6 +32,10 @@ namespace RimSynapse
         private const int EpisodeMaxOpenTicks = 15000;  // ~6 in-game hours
         public List<FiredIncidentRecord> firedIncidentHistory = new List<FiredIncidentRecord>();
         public List<WealthRecord> wealthHistory = new List<WealthRecord>();
+        // Player↔storyteller chat log for the Core-owned chat window (Core #99). Player and
+        // Storyteller messages only — carries no colonist speaker. Migrated out of the Conversations
+        // world component so the window works even when Conversations is not installed.
+        public List<StorytellerChatMessage> storytellerChatHistory = new List<StorytellerChatMessage>();
         public RaidOutcomeRecord lastRaidOutcome;
         private int lastPurgeTick = -1;
         public string activeRaidEventId;
@@ -74,6 +78,43 @@ namespace RimSynapse
         public float TensionModifier = 1.0f;
         public int lastInvestigationHour = -1;
 
+        // LLM-driven incident selection: single-decision-in-flight guard (Core #67). One async
+        // selection may be pending at a time — a slow call must not overlap the next beat. Both
+        // fields are scribed so a decision interrupted by save/quit does not wedge the storyteller:
+        // the callback that would clear the flag lives in a process that is now gone, so on load a
+        // flag older than DecisionStaleTicks is treated as stale and a fresh decision may begin.
+        public bool storytellerDecisionInFlight = false;
+        public int storytellerDecisionStartTick = -1;
+        private const int DecisionStaleTicks = 2500; // ~1 in-game hour; a real async call resolves in seconds
+
+        /// <summary>Whether a storyteller decision is currently pending and not yet stale (#67).</summary>
+        public bool StorytellerDecisionInFlight
+            => !RimSynapse.Comps.StorytellerDecisionGate.CanBegin(
+                storytellerDecisionInFlight, storytellerDecisionStartTick, NowTick, DecisionStaleTicks);
+
+        /// <summary>
+        /// Claim the single in-flight slot for a new decision. Returns false if one is already
+        /// pending (and not stale), in which case the caller must not start another.
+        /// </summary>
+        public bool TryBeginStorytellerDecision()
+        {
+            if (!RimSynapse.Comps.StorytellerDecisionGate.CanBegin(
+                    storytellerDecisionInFlight, storytellerDecisionStartTick, NowTick, DecisionStaleTicks))
+                return false;
+            storytellerDecisionInFlight = true;
+            storytellerDecisionStartTick = NowTick;
+            return true;
+        }
+
+        /// <summary>Release the in-flight slot once a decision has settled (or failed).</summary>
+        public void EndStorytellerDecision()
+        {
+            storytellerDecisionInFlight = false;
+            storytellerDecisionStartTick = -1;
+        }
+
+        private static int NowTick => Find.TickManager != null ? Find.TickManager.TicksGame : GenTicks.TicksGame;
+
         public SynapseCoreWorldComponent(World world) : base(world)
         {
         }
@@ -98,6 +139,8 @@ namespace RimSynapse
             Scribe_Values.Look(ref BasePacingMultiplier, "basePacingMultiplier", 1.0f);
             Scribe_Values.Look(ref TensionModifier, "tensionModifier", 1.0f);
             Scribe_Values.Look(ref lastInvestigationHour, "lastInvestigationHour", -1);
+            Scribe_Values.Look(ref storytellerDecisionInFlight, "storytellerDecisionInFlight", false);
+            Scribe_Values.Look(ref storytellerDecisionStartTick, "storytellerDecisionStartTick", -1);
             Scribe_Values.Look(ref activeRaidEventId, "activeRaidEventId");
             Scribe_Deep.Look(ref activeRaidTracker, "activeRaidTracker");
             Scribe_Collections.Look(ref mapGreenhouseCells, "mapGreenhouseCells", LookMode.Value, LookMode.Value);
@@ -107,6 +150,8 @@ namespace RimSynapse
             Scribe_Collections.Look(ref raidRecruitedPawns, "raidRecruitedPawns", LookMode.Value, LookMode.Value);
             Scribe_Collections.Look(ref visitorEntryTicks, "visitorEntryTicks", LookMode.Value, LookMode.Value);
             Scribe_Collections.Look(ref wealthHistory, "wealthHistory", LookMode.Deep);
+            Scribe_Collections.Look(ref storytellerChatHistory, "storytellerChatHistory", LookMode.Deep);
+            Scribe_Collections.Look(ref worldHistory, "worldHistory", LookMode.Deep);
             Scribe_Deep.Look(ref lastRaidOutcome, "lastRaidOutcome");
 
             if (Scribe.mode == LoadSaveMode.Saving)
@@ -123,6 +168,8 @@ namespace RimSynapse
                 if (backlogQueueList == null) backlogQueueList = new List<PastEvent>();
                 if (firedIncidentHistory == null) firedIncidentHistory = new List<FiredIncidentRecord>();
                 if (wealthHistory == null) wealthHistory = new List<WealthRecord>();
+                if (storytellerChatHistory == null) storytellerChatHistory = new List<StorytellerChatMessage>();
+                if (worldHistory == null) worldHistory = new List<WorldHistoryEntry>();
                 if (pawnEventRecords == null) pawnEventRecords = new List<PawnEventRecord>();
                 if (steleEventLinks == null) steleEventLinks = new Dictionary<string, string>();
                 

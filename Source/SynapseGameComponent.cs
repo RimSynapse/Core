@@ -362,7 +362,9 @@ namespace RimSynapse
                             if (request != null && !string.IsNullOrEmpty(request.name))
                             {
                                 string argsStr = request.arguments != null ? Newtonsoft.Json.JsonConvert.SerializeObject(request.arguments) : "{}";
-                                string result = SynapseToolRegistry.ExecuteTool(request.name, argsStr);
+                                // A bridge request may declare a vocabulary scope (the executor
+                                // MCP scope, Core #63/#68); absent = unscoped, as before.
+                                string result = SynapseToolRegistry.ExecuteTool(request.name, argsStr, true, request.scope);
                                 System.IO.File.WriteAllText(toolOutputPath, result);
                             }
                             else
@@ -483,6 +485,9 @@ namespace RimSynapse
     {
         public string name;
         public object arguments;
+
+        /// <summary>Optional tool-vocabulary scope for this request (Core #63). Null = unscoped.</summary>
+        public string scope;
     }
 }
 

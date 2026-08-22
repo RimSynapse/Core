@@ -597,6 +597,88 @@ namespace RimSynapse.Comps
         }
 
         /// <summary>
+        /// The ONE canonical pawn-id scheme for memory linkage (Core #80): <see cref="Thing.GetUniqueLoadID"/>,
+        /// which matches the social network and therapy memories and is stable across the subject's death.
+        /// Every producer of a memory that is "about" a pawn must key <see cref="WeightedMemory.subjectPawnIds"/>
+        /// with this — not <c>ThingID</c>, not a tag — so relational consolidation can actually connect
+        /// memories about the same pawn.
+        /// </summary>
+        public static string MemoryPawnId(Pawn pawn) => pawn?.GetUniqueLoadID();
+
+        /// <summary>
+        /// Record a memory that is ABOUT another pawn, linked for consolidation via the canonical
+        /// subject-pawn id and routed through the indexed <see cref="AddMemory"/> (Core #80). This is
+        /// the framework seam producers leverage — Conversations chit-chat, event/death memories —
+        /// instead of building a <see cref="WeightedMemory"/> by hand and pushing it onto the list with
+        /// an inconsistent id in a tag. Returns the stored memory.
+        /// </summary>
+        public WeightedMemory AddMemoryAbout(Pawn aboutPawn, string summary, string memoryType, float weight,
+            List<string> tags = null, bool isLongTerm = false, float decayRate = 0.1f)
+        {
+            int nowTick = Find.TickManager != null ? Find.TickManager.TicksGame : GenTicks.TicksGame;
+            var mem = new WeightedMemory
+            {
+                summary = summary,
+                memoryType = memoryType,
+                tags = tags ?? new List<string>(),
+                subjectPawnIds = aboutPawn != null
+                    ? new List<string> { MemoryPawnId(aboutPawn) }
+                    : new List<string>(),
+                gameTick = nowTick,
+                absTick = Utils.SynapseDateHelper.GameTickToAbsTick(nowTick),
+                weight = weight,
+                baseWeight = weight,
+                decayRate = decayRate,
+                isLongTerm = isLongTerm,
+            };
+            AddMemory(mem);
+            return mem;
+        }
+
+        /// <summary>
+        /// Record a memory about MULTIPLE pawns (e.g. an overheard exchange between two colonists),
+        /// linked to each via the canonical subject id and routed through the indexed AddMemory (Core #80).
+        /// </summary>
+        public WeightedMemory AddMemoryAbout(IEnumerable<Pawn> aboutPawns, string summary, string memoryType, float weight,
+            List<string> tags = null, bool isLongTerm = false, float decayRate = 0.1f)
+        {
+            int nowTick = Find.TickManager != null ? Find.TickManager.TicksGame : GenTicks.TicksGame;
+            var ids = new List<string>();
+            if (aboutPawns != null)
+                foreach (var p in aboutPawns)
+                {
+                    string id = MemoryPawnId(p);
+                    if (!string.IsNullOrEmpty(id) && !ids.Contains(id)) ids.Add(id);
+                }
+
+            var mem = new WeightedMemory
+            {
+                summary = summary,
+                memoryType = memoryType,
+                tags = tags ?? new List<string>(),
+                subjectPawnIds = ids,
+                gameTick = nowTick,
+                absTick = Utils.SynapseDateHelper.GameTickToAbsTick(nowTick),
+                weight = weight,
+                baseWeight = weight,
+                decayRate = decayRate,
+                isLongTerm = isLongTerm,
+            };
+            AddMemory(mem);
+            return mem;
+        }
+
+        /// <summary>Remove a memory and unindex it (mirrors <see cref="AddMemory"/>). False if absent.</summary>
+        public bool RemoveMemory(WeightedMemory memory)
+        {
+            if (memory == null) return false;
+            int idx = memories.IndexOf(memory);
+            if (idx < 0) return false;
+            RemoveMemoryAt(idx);
+            return true;
+        }
+
+        /// <summary>
         /// Select memories for context by tier (design §5.8): long-term / high-salience first, then the
         /// remaining budget filled with recent high-weight short-term — instead of a flat top-N-by-weight,
         /// which favours stale minor memories that merely haven't decayed yet. Surfacing counts as a

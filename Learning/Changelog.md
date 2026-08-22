@@ -2,6 +2,17 @@
 
 Full version history for RimSynapse - Core. The mod page and Workshop description show only the latest release; every earlier version is recorded here.
 
+## v0.9.0 - The Aura Storyteller Engine
+- NEW - LLM-driven incident selection: when a RimSynapse storyteller (Aura) is active, the AI chooses WHICH eligible incident fires on the game's own deterministic cadence - the model never rolls timing, only picks what. Backend offline or budget spent falls back to the vanilla weighted roll for that beat, so the colony is always fully playable.
+- NEW - Storyteller tool vocabulary: the storyteller runs on a curated allowlist of storytelling verbs enforced at the executor boundary; god-mode and diagnostic tools are structurally unreachable, and consequence verbs clamp to the difficulty budget.
+- NEW - Difficulty and personality context: the difficulty (including a custom threat-scale slider) is injected as a hard points ceiling plus a mood mandate, and the storyteller's personality profile rides every storyteller and chat prompt.
+- NEW - Player-storyteller chat window (migrated from Conversations): a floating chat with Aura, storyteller-gated, save-backed, with optional voice - works with or without Conversations installed.
+- NEW - Two agents, two scopes: the Chat agent holds zero consequence tools (a jailbroken chat can be rude, not dangerous) and player messages never trigger storyteller turns; only a typed mood signal - never your words - reaches the storyteller, on its own schedule.
+- NEW - World history store: save-backed record of regional incidents and outcomes; unresolved events stay open as threads the storyteller calls back to later. Bounded so saves stay sane.
+- NEW - Regional-incident lifecycle hook: Core broadcasts incident start and first-level resolution (primitive payloads, reflection-subscribable) for Storyteller, WorldNews, Factions and Regions to react on their own terms.
+- NEW - Memory-linkage framework: one canonical pawn-id scheme (AddMemoryAbout / MemoryPawnId) so chit-chat about a pawn actually consolidates with later events about them - the "chit-chat about someone who then dies" promotion now fires on real data.
+- NEW - GpuStats in-process consumers channel: a mod loading a model into VRAM inside RimWorld's process (e.g. Local TTS) can register its footprint for its own line in the NVIDIA Tool's VRAM breakdown.
+
 ## v0.7.1 - Weight-driven memory and evaluation
 - NEW - Memories now live on a single 0-1 importance scale, and short-term vs long-term is emergent: a memory becomes long-term once its relational salience - its links to other significant memories and people - crosses a threshold, not from a hardcoded type list.
 - NEW - Relational consolidation: idle chit-chat fades within a day or two, but chit-chat about someone who then dies is pulled up into long-term memory the day the death lands.

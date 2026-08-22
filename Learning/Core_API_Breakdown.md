@@ -203,3 +203,90 @@ The population density mechanics reside in `RimSynapse-Factions` and link to Cor
 *   **Geodesic BFS Algorithm**: Calculates population density using step-wise biome and road link multipliers.
 *   **Homestead Generator**: Procedurally spawns pre-built cabins, crops, or pasture fences if a player starts or settles on a tile containing dwellings.
 *   **Tile Inspector**: Draws `"Pawn dwellings: <pop>"` in the world selection panel.
+
+---
+
+## 11. Storyteller Engine and Two-Agent Isolation (0.9)
+
+The 0.9 storyteller stack. Everything is gated on a RimSynapse storyteller being active
+(`SynapseStorytellerContext.IsRimSynapseStorytellerActive`); under a vanilla storyteller every
+surface here is inert.
+
+### Tool vocabulary scopes (`SynapseToolVocabulary`)
+
+Named allowlists enforced at the executor boundary — capability, not prompt. A verb outside the
+active scope cannot execute regardless of prompt content.
+
+*   `SynapseToolVocabulary.StorytellerScope` — the storytelling verbs (read-only colony senses +
+    `fire_incident` / `trigger_colonist_break`, both clamped to the difficulty budget).
+*   `SynapseToolVocabulary.ChatScope` — defined but **empty**: the player-facing Chat agent runs
+    under it and can execute nothing (fail-closed).
+*   `Add(scope, params string[] toolNames)` — how a companion mod contributes a storytelling verb
+    of its own to a scope. Unregistered names are permitted (register-by-name).
+*   `IsAllowed(scope, toolName)` / `Tools(scope)` / `ResolvePoints(requested, ceiling, scope)`.
+*   Pass a scope on any request via `ChatOptions.toolScope`.
+
+### Incident selection (`StorytellerComp_Storyteller`, `StorytellerDecisionGate`)
+
+The LLM picks **what** fires; the game's deterministic `IncidentCountThisInterval` decides when.
+One decision in flight at a time (scribed; a stale flag self-clears after load). Backend
+unavailable → synchronous vanilla weighted fallback, so no beat is ever dropped. Decisions land
+via `IncidentQueue`, which revalidates `CanFireNow` on fire.
+
+### Typed chat sentiment (`StorytellerChatSentiment`)
+
+The anti-injection bridge between the Chat and Storyteller agents. `Derive(playerMessages)`
+reduces player chat to typed booleans (`RequestedMercy`, `Taunted`, `Pleaded`, `Pleased`,
+`Hostile`) by deterministic keyword match — no LLM, no free text. `ToPromptLine()` renders only
+the flags; the player's words never reach the executor-scoped agent.
+
+### Incident lifecycle hook (`SynapseIncidentLifecycle`)
+
+Broadcast hook with **primitive-only payloads**, so consumers subscribe by reflection with no
+Core type in the signature (build and run with Core absent):
+
+*   `OnIncidentStarted` — `Action<string kind, string region, float magnitude, string origin, int leadTimeTicks>`.
+    Emitted from the incident firing path for regionalizable (Tier A–D environmental) incidents only.
+*   `OnIncidentResolved` — `Action<string kind, string region, string outcome>`. Emitted when a
+    regionalizable `GameCondition` ends; deduped per incident instance (an oscillating condition
+    cannot double-fire).
+*   Throwing subscribers are contained and recorded, never fatal.
+
+### World history store (`SynapseCoreWorldComponent`)
+
+Save-backed canonical record of regional incidents and outcomes, fed by the lifecycle hook.
+
+*   `RecordIncidentStart(kind, region, magnitude, origin, gameTick)` / `RecordIncidentResolution(kind, region, outcome, gameTick)`
+*   `QueryWorldHistory(region?, kind?, sinceTick?)` — filterable query over `WorldHistoryEntry`.
+*   `OpenThreads()` — unresolved incidents; surfaced into storyteller context via
+    `WorldHistoryContextBlock()`.
+*   Bounded: eviction prefers resolved history over open threads (`WorldHistoryCuration`).
+
+## 12. Memory Linkage Framework (0.9, Core #80)
+
+Core owns the memory mechanics; producer mods only trigger them.
+
+*   `SynapseCorePawnComp.MemoryPawnId(Pawn)` — the ONE canonical pawn-id scheme for memory
+    linkage: `GetUniqueLoadID()` (stable across death; matches the social network and therapy
+    memories). Never key `subjectPawnIds` with `ThingID`.
+*   `SynapseCorePawnComp.AddMemoryAbout(aboutPawn, summary, memoryType, weight, tags?, isLongTerm?, decayRate?)`
+    — record a memory that is *about* a pawn: keys `subjectPawnIds` canonically and routes
+    through the indexed `AddMemory`, so relational consolidation can connect memories about the
+    same pawn. An `IEnumerable<Pawn>` overload links a memory to multiple subjects (e.g. an
+    overheard exchange).
+*   `SynapseCorePawnComp.RemoveMemory(WeightedMemory)` — public unindexing remove.
+*   `PastEvent.involvedPawnLoadIds` — canonical ids captured at event time (death / downed /
+    kidnapped), usable after the subject despawns. Parallel to `involvedPawnIds` (ThingID),
+    which episode coalescing keys on.
+
+## 13. GPU Memory Consumers (`GpuStats`, Core #104)
+
+For a mod that loads a model into VRAM **inside RimWorld's own process** (invisible to
+per-process NVML enumeration):
+
+*   `SynapseClient.Gpu.UpsertConsumer(modId, label, vramMb, resident)` — thread-safe upsert by
+    modId; a non-resident (CPU) consumer reports 0.
+*   `SynapseClient.Gpu.ConsumersSnapshot()` — thread-safe copy for a monitor mod's UI read.
+*   `SynapseClient.Gpu.RemoveConsumer(modId)` — drop the row entirely (e.g. on dispose).
+*   Producer: Local TTS registers Kokoro's footprint. Consumer: the NVIDIA Tool renders each
+    resident consumer as its own VRAM breakdown line, subtracted from "System".

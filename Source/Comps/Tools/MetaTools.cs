@@ -64,6 +64,10 @@ namespace RimSynapse
                     // The old handler returned full schemas for the entire registry on an
                     // unfiltered call, which no small context window can afford. Full
                     // schemas come from describe_tool, one tool at a time.
+                    //
+                    // Scoped runs (Core #63) only see their vocabulary: what an agent can
+                    // discover matches what the executor will let it do.
+                    string scope = CurrentScope;
                     var list = new List<object>();
 
                     if (!string.IsNullOrEmpty(filter))
@@ -72,6 +76,8 @@ namespace RimSynapse
                         {
                             var tool = match.Tool;
                             if (tool.name == "list_available_tools" || tool.name == "execute_game_tool")
+                                continue;
+                            if (!SynapseToolVocabulary.IsAllowed(scope, tool.name))
                                 continue;
                             list.Add(new
                             {
@@ -86,6 +92,8 @@ namespace RimSynapse
                         foreach (var tool in _tools.Values.OrderBy(t => t.name))
                         {
                             if (tool.isDebugAction || tool.name == "list_available_tools" || tool.name == "execute_game_tool")
+                                continue;
+                            if (!SynapseToolVocabulary.IsAllowed(scope, tool.name))
                                 continue;
                             list.Add(new { name = tool.name, description = tool.description });
                         }
@@ -125,6 +133,9 @@ namespace RimSynapse
 
                     if (string.IsNullOrEmpty(name))
                         return "{\"error\": \"Missing 'name' argument.\"}";
+
+                    if (!SynapseToolVocabulary.IsAllowed(CurrentScope, name))
+                        return $"{{\"error\": \"Tool '{name}' is not in the '{CurrentScope}' vocabulary.\"}}";
 
                     if (!_tools.TryGetValue(name, out var tool))
                         return $"{{\"error\": \"Tool '{name}' not found. Search with list_available_tools first.\"}}";

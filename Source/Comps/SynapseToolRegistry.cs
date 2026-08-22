@@ -117,6 +117,20 @@ namespace RimSynapse
             return _tools.ContainsKey(name);
         }
 
+        // The vocabulary scope of the tool call currently executing on this thread. Nested
+        // ExecuteTool calls (a handler invoking another tool, execute_game_tool's re-entry)
+        // inherit it via the 3-arg overload, so a scoped run cannot launder a call out of
+        // its scope by going through an intermediary.
+        [ThreadStatic]
+        private static string _ambientScope;
+
+        /// <summary>
+        /// The tool-vocabulary scope active on this thread's current tool call, or null when
+        /// unscoped. Handlers read this to shape scope-aware answers (the meta-tools filter
+        /// their listings to it; fire_incident clamps points under it).
+        /// </summary>
+        public static string CurrentScope => _ambientScope;
+
         public static string ExecuteTool(string name, string argumentsJson)
         {
             return ExecuteTool(name, argumentsJson, allowMutating: true);
@@ -129,7 +143,26 @@ namespace RimSynapse
         /// </summary>
         public static string ExecuteTool(string name, string argumentsJson, bool allowMutating)
         {
+            return ExecuteTool(name, argumentsJson, allowMutating, _ambientScope);
+        }
+
+        /// <summary>
+        /// Execute a tool under a vocabulary scope (Core #63). A verb outside the scope is
+        /// refused with exactly one logged line and never runs — this is the capability
+        /// boundary, checked before the mutation gate. Null scope = unscoped (all tools).
+        /// Binary-compatible: the pre-existing overloads above keep their exact signatures.
+        /// </summary>
+        public static string ExecuteTool(string name, string argumentsJson, bool allowMutating, string toolScope)
+        {
             EnsureInitialized();
+            string scope = string.IsNullOrEmpty(toolScope) ? null : toolScope;
+
+            if (scope != null && !SynapseToolVocabulary.IsAllowed(scope, name))
+            {
+                SynapseLogger.Warning($"[Tool Vocabulary] '{name}' rejected: not in the '{scope}' scope. Not executed.", "performance");
+                return $"{{\"error\": \"Tool '{name}' is not in the '{scope}' vocabulary and cannot be executed by this agent.\"}}";
+            }
+
             if (_tools.TryGetValue(name, out var tool))
             {
                 if (!allowMutating && tool.isMutating)
@@ -137,6 +170,8 @@ namespace RimSynapse
                     return $"{{\"error\": \"Tool '{name}' changes game state and this run is not permitted to mutate. Use a read-only tool, or the player can enable 'Allow autonomous mutations' in settings.\"}}";
                 }
 
+                var previousScope = _ambientScope;
+                _ambientScope = scope ?? previousScope;
                 try
                 {
                     return tool.handler(argumentsJson);
@@ -144,6 +179,10 @@ namespace RimSynapse
                 catch (Exception ex)
                 {
                     return $"{{\"error\": \"Exception during tool execution: {ex.Message}\"}}";
+                }
+                finally
+                {
+                    _ambientScope = previousScope;
                 }
             }
             return $"{{\"error\": \"Tool '{name}' not found.\"}}";

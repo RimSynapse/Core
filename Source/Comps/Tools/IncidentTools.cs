@@ -133,31 +133,36 @@ namespace RimSynapse
                             return "{\"success\": false, \"reason\": \"IncidentDef '" + defName + "' not found.\"}";
                         }
 
-                        float points = 0f;
+                        float requestedPoints = 0f;
                         if (parsedArgs.TryGetValue("pointsOverride", out var ptsVal) && ptsVal != null)
                         {
-                            float.TryParse(ptsVal.ToString(), out points);
+                            float.TryParse(ptsVal.ToString(), out requestedPoints);
                         }
 
                         IncidentParms parms = new IncidentParms();
                         parms.target = Find.CurrentMap;
-                        
-                        if (points > 0f)
+
+                        // The difficulty ceiling: the same number the storyteller budgets
+                        // with (dynamic when the RimSynapse comp is present, vanilla otherwise).
+                        float ceiling;
+                        var comp = Find.World.GetComponent<SynapseCoreWorldComponent>();
+                        if (comp != null)
                         {
-                            parms.points = points;
+                            float vanillaPoints = StorytellerUtility.DefaultThreatPointsNow(parms.target);
+                            ceiling = comp.CalculateDynamicThreatPoints(Find.CurrentMap, vanillaPoints);
                         }
                         else
                         {
-                            var comp = Find.World.GetComponent<SynapseCoreWorldComponent>();
-                            if (comp != null)
-                            {
-                                float vanillaPoints = StorytellerUtility.DefaultThreatPointsNow(parms.target);
-                                parms.points = comp.CalculateDynamicThreatPoints(Find.CurrentMap, vanillaPoints);
-                            }
-                            else
-                            {
-                                parms.points = StorytellerUtility.DefaultThreatPointsNow(parms.target);
-                            }
+                            ceiling = StorytellerUtility.DefaultThreatPointsNow(parms.target);
+                        }
+
+                        // A vocabulary-scoped caller (the Storyteller agent) is clamped to the
+                        // ceiling; an unscoped caller (operator console, dev tools) keeps its
+                        // override untouched (Core #63).
+                        parms.points = SynapseToolVocabulary.ResolvePoints(requestedPoints, ceiling, SynapseToolRegistry.CurrentScope);
+                        if (requestedPoints > 0f && parms.points < requestedPoints)
+                        {
+                            SynapseLogger.Message($"[Tool Vocabulary] fire_incident points clamped from {requestedPoints:F0} to the difficulty ceiling {parms.points:F0} for scope '{SynapseToolRegistry.CurrentScope}'.", "performance");
                         }
 
                         parms.forced = true;
@@ -167,7 +172,6 @@ namespace RimSynapse
 
                         if (success)
                         {
-                            var comp = Find.World.GetComponent<SynapseCoreWorldComponent>();
                             comp?.RegisterFiredIncident(defName);
                         }
 

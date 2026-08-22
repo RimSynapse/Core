@@ -5,6 +5,7 @@ Welcome to the documentation for the **RimSynapse Core** module. Below is a comp
 ## Table of Contents
 
 - [Agent Scripting and Tools](Agent_Scripting_and_Tools) — mod builder guide for the agent and tool foundation
+- [Aura Storyteller and Chat](Aura_Storyteller_and_Chat) — the 0.9 storyteller engine: LLM incident selection, the chat window, and the two-agent design
 - [Cloud Llms](cloud-llms)
 - [Core API Breakdown](Core_API_Breakdown)
 - [Core LLM Request Queue](Core_LLM_Request_Queue)
