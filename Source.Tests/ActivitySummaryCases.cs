@@ -53,6 +53,23 @@ namespace RimSynapse.Tests
                 return $"summary='{summary}'";
             });
 
+            // A labelless JobDef must never leak its raw defName into the summary. GotoWander has no
+            // <label> but a clean <reportString> ("wandering."), so it must humanize to that phrase —
+            // NOT the raw "gotowander" that was surfacing in ambient dialogue.
+            yield return new SynapseTestCase("Core_LabellessJobHumanizesNotRawDefName", () =>
+            {
+                var comp = new SynapseCorePawnComp { lastJobStartedTick = -1 };
+                int now = Find.TickManager.TicksGame;
+                comp.recentJobs.Add(new JobInterval("GotoWander", now - 5000, 4000));
+
+                string summary = comp.GetRecentJobsSummary();
+                Assert.DoesNotContain(summary.ToLowerInvariant(), "gotowander",
+                    "a labelless job must not leak its raw defName");
+                Assert.Contains(summary, "wandering",
+                    "GotoWander must humanize via its reportString to 'wandering'");
+                return $"summary='{summary}'";
+            });
+
             // The classifier itself: a non-pawn thing is an object; an invalid target is null.
             yield return new SynapseTestCase("Core_ClassifyTargetKind", () =>
             {
