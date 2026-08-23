@@ -102,6 +102,10 @@ namespace RimSynapse
         public bool disableThinking = true;
         public bool disableSafetyContextStripping = false;
         public float audioBoost = 2.5f;
+        // Local-TTS call sites (Core #111): each site asks SynapseSpeech first only when its
+        // toggle is on; both default off so installing a speech mod changes nothing by itself.
+        public bool localTtsSpeakChatReplies = false;
+        public bool localTtsSpeakLetters = false;
 
         // --- Context Embedding ---
         public bool enableContextEmbedding = false;
@@ -311,6 +315,8 @@ namespace RimSynapse
             Scribe_Values.Look(ref disableThinking, "disableThinking", true);
             Scribe_Values.Look(ref disableSafetyContextStripping, "disableSafetyContextStripping", false);
             Scribe_Values.Look(ref audioBoost, "audioBoost", 2.5f);
+            Scribe_Values.Look(ref localTtsSpeakChatReplies, "localTtsSpeakChatReplies", false);
+            Scribe_Values.Look(ref localTtsSpeakLetters, "localTtsSpeakLetters", false);
             Scribe_Values.Look(ref timeoutSeconds, "timeoutSeconds", 240);
             Scribe_Values.Look(ref maxRequestsPerMinute, "maxRequestsPerMinute", 30);
             Scribe_Values.Look(ref maxConcurrentRequests, "maxConcurrentRequests", 2);

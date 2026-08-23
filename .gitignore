@@ -30,3 +30,11 @@ game_state.json
 game_state_request.json
 storyteller_input.txt
 storyteller_output.log
+
+# Built assemblies ship as release zip assets, never in git (Core#110)
+Assemblies/*.dll
+
+# In-game test assemblies build here (loaded by the RimAgentic test host under -synapse-test);
+# never committed and never shipped - the release payload allowlist excludes this folder.
+TestAssemblies/
+Source.Tests/obj/

@@ -2,6 +2,12 @@
 
 Full version history for RimSynapse - Core. The mod page and Workshop description show only the latest release; every earlier version is recorded here.
 
+## v0.9.1 - Fixes and the Speech Surface
+- FIX - Ambient dialogue no longer leaks raw job defNames: a labelless job such as `GotoWander` fell through to its raw defName and surfaced in Conversations dialogue as "the gotowander they've been busy with". Jobs are now humanized through a label -> clean reportString -> spaced-camelCase fallback that never emits a raw defName.
+- SAFETY - The mutating-tool manifest is complete: nine previously-unflagged state-changing tools are now flagged as mutating, so an autonomous run cannot invoke them unless `allowAutonomousMutations` is set.
+- NEW (for modders) - TextToSpeech provider surface: a Core provider slot plus the `SynapseSpeech` accessor that a Local-TTS mod binds to by reflection, with a documented unregistered fallback (see the Local TTS / Voicebox guide).
+- Internal - The in-game test suite moved in-repo from the retired TestRunner, the release-gates workflow checks the harness out of the dev-tools fork, and every GitHub release now carries a RimSort-installable zip asset plus a per-file `CHECKSUMS.sha256` manifest.
+
 ## v0.9.0 - The Aura Storyteller Engine
 - NEW - LLM-driven incident selection: when a RimSynapse storyteller (Aura) is active, the AI chooses WHICH eligible incident fires on the game's own deterministic cadence - the model never rolls timing, only picks what. Backend offline or budget spent falls back to the vanilla weighted roll for that beat, so the colony is always fully playable.
 - NEW - Storyteller tool vocabulary: the storyteller runs on a curated allowlist of storytelling verbs enforced at the executor boundary; god-mode and diagnostic tools are structurally unreachable, and consequence verbs clamp to the difficulty budget.

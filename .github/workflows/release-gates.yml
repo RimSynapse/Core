@@ -44,22 +44,27 @@ jobs:
         with:
           path: ${{ github.event.repository.name }}
 
+      # The harness lives in the dev-tools fork (RimSynapse/Repo-MCP was deprecated and
+      # has since been deleted — a checkout of it fails outright). Pinned to development:
+      # that is the branch the local dev loop exercises, so gate logic stays current; a
+      # broken harness fails the gate loudly instead of a stale main lying quietly.
       - name: Check out the harness
         uses: actions/checkout@v4
         with:
-          repository: RimSynapse/Repo-MCP
-          path: Repo-MCP
+          repository: archdukejim/rimworld-claude-dev-tools
+          ref: development
+          path: dev-tools
 
       - name: Metadata gate
         shell: pwsh
         run: >
-          ./Repo-MCP/harness/verify-metadata.ps1
+          ./dev-tools/harness/verify-metadata.ps1
           -Root "${{ github.workspace }}/${{ github.event.repository.name }}"
 
       - name: Wiki drift gate
         shell: pwsh
         run: |
-          $json = ./Repo-MCP/harness/sync-wiki.ps1 `
+          $json = ./dev-tools/harness/sync-wiki.ps1 `
             -Root "${{ github.workspace }}/${{ github.event.repository.name }}" -WhatIf
           $json
           $result = $json | ConvertFrom-Json

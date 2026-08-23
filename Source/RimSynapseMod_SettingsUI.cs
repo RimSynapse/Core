@@ -308,6 +308,13 @@ namespace RimSynapse
 
             listing.Gap(6f);
 
+            listing.CheckboxLabeled("Speak storyteller chat replies via local TTS",
+                ref Settings.localTtsSpeakChatReplies,
+                "Route storyteller chat replies to an installed local text-to-speech mod (e.g. Local Text to Speech). Falls back to the audio provider route when no speech mod is installed.");
+            listing.CheckboxLabeled("Speak letter reactions via local TTS",
+                ref Settings.localTtsSpeakLetters,
+                "Route the storyteller's letter reaction lines to an installed local text-to-speech mod. Falls back to the audio provider route when no speech mod is installed.");
+
             listing.Gap(6f);
             listing.CheckboxLabeled("Enable LM Studio Trace Debug Mode",
                 ref Settings.traceDebugMode,

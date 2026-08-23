@@ -206,7 +206,12 @@ namespace RimSynapse
                             scrollToBottom = true;
 
                             var extension = Find.Storyteller?.def?.GetModExtension<StorytellerVoiceExtension>();
-                            if (extension != null)
+                            // Local TTS gets first claim when its toggle is on (Core #111); the
+                            // provider route below stays the fallback so an absent speech mod
+                            // changes nothing.
+                            bool spokenLocally = RimSynapseMod.Instance.Settings.localTtsSpeakChatReplies
+                                && SynapseSpeech.TrySpeak(reply, extension?.localVoicePath);
+                            if (!spokenLocally && extension != null)
                             {
                                 TriggerStorytellerVoice(reply, extension);
                             }

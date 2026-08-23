@@ -329,8 +329,11 @@ Run these in order. Every step exists because skipping it has shipped a defect.
 4. **Run the gate** (below), fixing anything it reports.
 5. **Commit and push to `development`**, then open and merge the release-promotion PR into
    `main` (use a merge commit — a release should keep its history).
-6. **Tag** `vX.Y.Z` on `main` and publish the GitHub Release; attach Core's DLLs and
-   `CHECKSUMS.sha256`.
+6. **Tag** `vX.Y.Z` on `main` and publish the GitHub Release; attach Core's DLLs,
+   `CHECKSUMS.sha256`, and the RimSort-installable payload zip —
+   `harness\package-release.ps1 -Repo <mod> -Tag vX.Y.Z -Upload` (every repo, every
+   release: RimSort installs from GitHub only via a `.zip` release *asset*, not the
+   auto-generated source archive — #109).
 7. **Update the live Steam Workshop description for every mod** from
    `About/steam_description.txt`. The local file is only the source of truth — it changes
    nothing on the Workshop until it is pasted into each item's page. Needs a
@@ -377,7 +380,7 @@ Binaries have two sources of truth, and both have drifted before. Before tagging
 .\harness\verify-branches.ps1          # nothing finished is sitting outside development
 .\harness\verify-metadata.ps1          # version + changelog agree in all three places
 .\harness\verify-binaries.ps1 -Build   # rebuild, then check every shipped DLL
-.\harness\release-manifest.ps1         # regenerate Core's Assemblies/CHECKSUMS.sha256
+.\harness\release-manifest.ps1 -Repo X # regenerate the repo's Assemblies/CHECKSUMS.sha256
 ```
 
 `verify-branches.ps1` runs **first**, because everything after it verifies the wrong
@@ -403,17 +406,19 @@ embedded description is easy to forget precisely because it duplicates the Works
 `verify-metadata.ps1` fails when they disagree, when the description's changelog has no
 entry for the current version, or when About.xml stops being well-formed.
 
-- **Every repo tracks its built DLLs** (decided 2026-08-22, #95): a plain clone or a
-  GitHub release's source archive is immediately playable, which is what lets RimSort
-  install straight from GitHub for off-Steam testing. Core and R&T used to be
-  Release-asset-only; they are not anymore. The hazard is source landing without a
-  rebuild — Psychology shipped a source-only escalation feature this way.
-  `verify-binaries.ps1 -Build` fails when a committed DLL differs from a fresh build of
-  its own source.
-- Core additionally keeps `Assemblies/CHECKSUMS.sha256` — version, commit, and SHA256 per
-  file. Regenerate it in the release commit, attach the DLLs as Release assets as before,
-  and re-run `verify-binaries.ps1` immediately before a Workshop upload to confirm the
-  files on disk are byte-for-byte the released build.
+- **No repo tracks built DLLs** (decided 2026-08-23, #110, effective with the 0.10 wave —
+  supersedes #95's track-everything decision): binaries ship in each release's
+  RimSort-installable zip asset, which `package-release.ps1` builds from the tag's tree,
+  injecting locally built DLLs only after each one's SHA256 matches the tag's committed
+  `Assemblies/CHECKSUMS.sha256`. Every repo tracks that manifest; regenerate it in the
+  release commit with `release-manifest.ps1 -Repo <mod>`. The hazard is unchanged —
+  source landing without a rebuild — and so is the gate: `verify-binaries.ps1 -Build`
+  fails when a disk DLL differs from a fresh build of its own source, and untracked DLLs
+  verify against the manifest. Builds are deterministic (a fresh build reproduced the
+  v0.9.0 checksums byte-for-byte), so any release is reproducible from its tag.
+- The accepted cost: a plain clone is **not** playable without a build — install from
+  the release's zip asset instead. Re-run `verify-binaries.ps1` immediately before a
+  Workshop upload to confirm the files on disk are byte-for-byte the released build.
 
 ## Branch discipline
 
@@ -431,5 +436,5 @@ entry for the current version, or when About.xml stops being well-formed.
   TestRunner) so a mid-sequence build is never broken.
 - `main` only via release promotion PRs — that gate is real, because it marks a release.
 - Versioning is `0.<iteration>.<minor>`; never plan or tag anything `1.0`.
-- Every repo commits its built `Assemblies/*.dll` (Core's DLLs additionally attach to
-  GitHub Releases). `Source/obj/` is never tracked.
+- Built `Assemblies/*.dll` are never committed (from 0.10 — #110); the tracked record is
+  `Assemblies/CHECKSUMS.sha256`. `Source/obj/` is never tracked.

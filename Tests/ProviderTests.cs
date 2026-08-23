@@ -70,6 +70,32 @@ namespace ProviderTests
             Check("a negative tile reads 0", SynapseCoreProviders.PopulationDensityAt(-1) == 0);
             Check("...without consulting the provider", SynapseCoreProviders.PopulationDensityAt(0) == 7);
 
+            Section("the text-to-speech slot follows the same contract (Core #111)");
+            Reset();
+            Check("unregistered reads null through the accessor-side getter",
+                SynapseCoreProviders.TextToSpeechOrNote() == null);
+            for (int i = 0; i < 50; i++) SynapseCoreProviders.TextToSpeechOrNote();
+            Check("fifty unregistered reads produce one notice",
+                SynapseLogger.CountContaining("No provider registered for 'TextToSpeech'") == 1);
+
+            string spokenText = null, spokenHint = null;
+            SynapseCoreProviders.TextToSpeech = (text, hint, onPcm) => { spokenText = text; spokenHint = hint; return true; };
+            Check("registration is announced",
+                SynapseLogger.CountContaining("Registered provider 'TextToSpeech'") == 1);
+            var tts = SynapseCoreProviders.TextToSpeechOrNote();
+            Check("a registered provider is handed back", tts != null);
+            Check("...and receives the text and hint", tts("hello rim", "af_heart", null) && spokenText == "hello rim" && spokenHint == "af_heart");
+
+            SynapseCoreProviders.TextToSpeech = null;
+            Check("clearing is announced", SynapseLogger.CountContaining("Provider 'TextToSpeech' cleared") == 1);
+            Check("cleared slot reads null again", SynapseCoreProviders.TextToSpeechOrNote() == null);
+
+            var ttsSlot = Type.GetType("RimSynapse.SynapseCoreProviders")
+                .GetProperty("TextToSpeech", BindingFlags.Public | BindingFlags.Static);
+            Check("the slot resolves and registers by reflection", ttsSlot != null && ttsSlot.CanWrite);
+            ttsSlot.SetValue(null, (Func<string, string, Action<byte[]>, bool>)((t, h, cb) => true));
+            Check("a reflection-registered provider answers", SynapseCoreProviders.TextToSpeechOrNote()("x", null, null));
+
             Section("a producer can register by reflection, with no reference to Core");
             // This is the whole point of the slot being a public static property: Regions and
             // Territories must build and run with Core absent, so it can only reach this by name.
@@ -110,6 +136,7 @@ namespace ProviderTests
         {
             SynapseCoreProviders.PopulationDensity = null;
             SynapseCoreProviders.Residency = null;
+            SynapseCoreProviders.TextToSpeech = null;
 #pragma warning disable 618
             SynapseCoreWorldComponent.GetPopulationDensityDelegate = null;
 #pragma warning restore 618
