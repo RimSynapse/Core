@@ -265,7 +265,7 @@ Current slots:
     Consumers call `PopulationDensityAt(tile)`.
 *   **`Residency`** (`Func<Pawn, bool>`): whether a pawn lives in a generated dwelling.
     Unregistered: false. Consumers call `IsResident(pawn)`.
-*   **`TextToSpeech`** (`Func<string, string, Action<byte[]>, bool>`, 0.10): synthesise a
+*   **`TextToSpeech`** (`Func<string, string, Action<byte[]>, bool>`, 0.9.1): synthesise a
     line as spoken audio — `(text, voiceHint, onPcm) => accepted`. Owned by Local Text to
     Speech. Return quickly (synthesise on your own worker, never the calling thread) and
     deliver 16-bit mono 24 kHz PCM to `onPcm`; Core routes it to playback, and `onPcm` is
