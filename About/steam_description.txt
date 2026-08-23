@@ -1,5 +1,5 @@
 [b]Discord Community:[/b] [url=https://discord.gg/eVBebZ2N9s]https://discord.gg/eVBebZ2N9s[/url]
-[b]Version:[/b] v0.9.0 (Target: RimWorld 1.6)
+[b]Version:[/b] v0.9.1 (Target: RimWorld 1.6)
 
 [h1]RimSynapse - Core[/h1]
 [b][url=https://github.com/RimSynapse/Core/wiki]Official Wiki and Documentation[/url][/b]
@@ -39,6 +39,14 @@ The LLM Direct Action Console acts as an AI-powered command center. You simply o
 These ship when they are ready - no dates.
 
 ---
+
+[h2]Changelog (v0.9.1) - Fixes and the Speech Surface[/h2]
+[list]
+[*] FIX - Ambient dialogue no longer leaks raw job defNames: a labelless job (e.g. GotoWander) is now humanized to readable text instead of surfacing as "the gotowander they've been busy with".
+[*] SAFETY - Completed the mutating-tool manifest: nine previously-unflagged state-changing tools are now flagged, so autonomous runs cannot invoke them unless mutations are explicitly allowed.
+[*] NEW (for modders) - TextToSpeech provider surface: a Core provider slot plus the SynapseSpeech accessor that Local-TTS and other speech mods bind to, with a documented unregistered fallback.
+[*] Internal - The in-game test suite now lives in-repo, and release builds ship a RimSort-installable zip asset alongside a per-file checksum manifest.
+[/list]
 
 [h2]Changelog (v0.9.0) - The Aura Storyteller Engine[/h2]
 [list]

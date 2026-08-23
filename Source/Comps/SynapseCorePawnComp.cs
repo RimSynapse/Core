@@ -1235,7 +1235,7 @@ namespace RimSynapse.Comps
         private static string DescribeJobActivity(string jobDefName, string targetKind, float pct)
         {
             var jobDef = DefDatabase<JobDef>.GetNamed(jobDefName, false);
-            string label = jobDef?.label ?? jobDefName;
+            string label = HumanizeJobLabel(jobDef, jobDefName);
             string pctStr = pct.ToStringPercent();
 
             if (IsCombatJob(jobDefName) && targetKind != null)
@@ -1250,6 +1250,27 @@ namespace RimSynapse.Comps
             }
 
             return $"{label} ({pctStr})";
+        }
+
+        /// <summary>
+        /// A human-readable phrase for a job — never the raw defName. Prefers the JobDef's
+        /// <c>label</c>; falls back to its <c>reportString</c> only when that reads as a clean
+        /// standalone phrase (no "TargetA"/"{0}" placeholders left to resolve at runtime); and
+        /// as a last resort spaces out the camelCase defName. This is what stops a labelless
+        /// JobDef like <c>GotoWander</c> (reportString "wandering.") from leaking into pawn
+        /// dialogue as the raw "gotowander".
+        /// </summary>
+        private static string HumanizeJobLabel(JobDef jobDef, string jobDefName)
+        {
+            if (!string.IsNullOrEmpty(jobDef?.label)) return jobDef.label;
+
+            string report = jobDef?.reportString;
+            if (!string.IsNullOrEmpty(report) && !report.Contains("Target") && report.IndexOf('{') < 0)
+            {
+                return report.TrimEnd('.', ' ');
+            }
+
+            return GenText.SplitCamelCase(jobDefName).ToLowerInvariant();
         }
     }
 

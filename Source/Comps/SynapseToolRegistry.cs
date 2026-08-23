@@ -219,12 +219,24 @@ namespace RimSynapse
             // Mutating manifest: the direct-action tools that change game state.
             // execute_game_tool is included because it can invoke anything by name —
             // leaving it unflagged would let a gated run launder mutations through it.
+            // set_game_volume mutates player prefs, so it is gated too.
+            // write_debugger_log is deliberately exempt: it appends to a diagnostic log
+            // and touches no game or player state.
             // Companion mods flag their own via RegisterTool(..., isMutating: true).
             MarkMutating(
                 "possess_colonist",
                 "damage_self_with_equipped",
                 "modify_pawn_state",
-                "execute_game_tool");
+                "execute_game_tool",
+                "fire_incident",
+                "send_notification_letter",
+                "modify_object_state",
+                "control_turret",
+                "fire_weapon_at_cell",
+                "trigger_colonist_break",
+                "attempt_remote_hack",
+                "spawn_hacker_base",
+                "set_game_volume");
         }
 
         private static void AssignDefaultKeywords()

@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <Import Project="GamePath.props" />
+
+    <!--
+        Dev-only in-game test cases, discovered and run by the RimAgentic toolkit's
+        TestRunnerGameComponent under -synapse-test. Builds into ..\TestAssemblies\ - a
+        sibling of Assemblies\ on purpose: RimWorld never auto-loads it, the release
+        packaging allowlist never ships it, and the harness build treats Source\ as the
+        one mod project. Do not move this project under Source\ and never output to
+        Assemblies\.
+    -->
+    <PropertyGroup>
+        <TargetFramework>net48</TargetFramework>
+        <AssemblyName>RimSynapseCoreTests</AssemblyName>
+        <RootNamespace>RimSynapse.Tests</RootNamespace>
+        <LangVersion>9.0</LangVersion>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <OutputPath>..\TestAssemblies\</OutputPath>
+        <DebugType>none</DebugType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Reference Include="Assembly-CSharp">
+            <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\Assembly-CSharp.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine">
+            <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.IMGUIModule">
+            <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.TextRenderingModule">
+            <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="RimAgentic">
+            <HintPath>$(RimAgenticAssembly)\RimAgentic.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="RimSynapseCore">
+            <HintPath>$(RimSynapseCoreAssembly)\RimSynapseCore.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="Newtonsoft.Json">
+            <HintPath>$(RimSynapseCoreAssembly)\Newtonsoft.Json.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="0Harmony">
+            <HintPath>$(HarmonyPath)\0Harmony.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3">
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+    </ItemGroup>
+
+</Project>
