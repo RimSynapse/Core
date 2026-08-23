@@ -329,8 +329,11 @@ Run these in order. Every step exists because skipping it has shipped a defect.
 4. **Run the gate** (below), fixing anything it reports.
 5. **Commit and push to `development`**, then open and merge the release-promotion PR into
    `main` (use a merge commit — a release should keep its history).
-6. **Tag** `vX.Y.Z` on `main` and publish the GitHub Release; attach Core's DLLs and
-   `CHECKSUMS.sha256`.
+6. **Tag** `vX.Y.Z` on `main` and publish the GitHub Release; attach Core's DLLs,
+   `CHECKSUMS.sha256`, and the RimSort-installable payload zip —
+   `harness\package-release.ps1 -Repo <mod> -Tag vX.Y.Z -Upload` (every repo, every
+   release: RimSort installs from GitHub only via a `.zip` release *asset*, not the
+   auto-generated source archive — #109).
 7. **Update the live Steam Workshop description for every mod** from
    `About/steam_description.txt`. The local file is only the source of truth — it changes
    nothing on the Workshop until it is pasted into each item's page. Needs a
