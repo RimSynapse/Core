@@ -59,12 +59,12 @@ namespace RimSynapse.Comps
         public string lastJobTargetKind;
         private int locationSampleCooldown = 5;
         /// <summary>
-        /// Migration source only. Residency moved to Regions and Territories in 0.7 — it generates
+        /// Migration source only. Residency moved to the territory mod in 0.7 — it generates
         /// the dwellings and was always the only writer of this field — and is read through
         /// <see cref="SynapseCoreProviders.IsResident"/>.
         ///
-        /// <para>Still scribed so a pre-0.7 save keeps its residents: R&amp;T reads this once per
-        /// pawn and adopts it. Dwelling generation runs only at map generation, so a dropped flag
+        /// <para>Still scribed so a pre-0.7 save keeps its residents: the territory mod reads this
+        /// once per pawn and adopts it. Dwelling generation runs only at map generation, so a dropped flag
         /// could never be re-derived. Remove this field, and its Scribe line, once that migration
         /// window has passed.</para>
         /// </summary>
@@ -213,7 +213,7 @@ namespace RimSynapse.Comps
                 }
 
                 // Simulated cooking for resident NPC pawns. Asks whoever owns residency rather than
-                // the local field, which as of 0.7 is only a migration source for R&T.
+                // the local field, which as of 0.7 is only a migration source for the territory mod.
                 if (SynapseCoreProviders.IsResident(pawn) && pawn.inventory != null)
                 {
                     bool hasMeals = false;

@@ -7,7 +7,7 @@ namespace RimSynapse
 {
     /// <summary>
     /// Resolves a coarse, stable region string for the incident-lifecycle hooks (Core #64). Region
-    /// is a biome-or-tile label a consumer (Regions and Territories, WorldNews) can resolve further;
+    /// is a biome-or-tile label a consumer (WorldNews, a territory mod) can resolve further;
     /// Core does not depend on any region system, so this is deliberately lightweight.
     /// </summary>
     internal static class IncidentLifecycleRegion

@@ -18,8 +18,8 @@ namespace RimSynapse
     /// `ReflectionTypeLoadException getting types in assembly X` and then skips that assembly in
     /// `GenTypes.AllTypes`. The mod's `Mod` subclass is never discovered, so it never *fails* to
     /// instantiate: no Harmony patches bind, no defs resolve, and nothing says the mod is dead.
-    /// Observed with Factions ordered before Regions and Territories — the whole mod vanished and
-    /// the test suite stayed green (RimSynapse/Factions#42, RimSynapse/TestRunner#6).</para>
+    /// Observed with Factions ordered before its territory-mod dependency — the whole mod vanished
+    /// and the test suite stayed green (RimSynapse/Factions#42, RimSynapse/TestRunner#6).</para>
     ///
     /// <para>This check reads the <i>cause</i> — declared order versus actual order — rather than
     /// the symptom. It therefore fires before def loading, so the explanation appears above the
@@ -106,7 +106,7 @@ namespace RimSynapse
 
             // packageIds are compared lower-invariant throughout: ModsConfig.xml writes them
             // lowercased, while About.xml's loadAfter entries keep their author's casing
-            // ("RimSynapse.RegionsAndTerritories"). A case-sensitive compare finds nothing.
+            // ("RimSynapse.Psychology"). A case-sensitive compare finds nothing.
             var position = new Dictionary<string, int>();
             for (int i = 0; i < active.Count; i++)
             {
