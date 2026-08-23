@@ -244,3 +244,34 @@ New extension points a companion mod can build against (all inert under a vanill
     RimWorld's process, `UpsertConsumer(modId, label, vramMb, resident)` on load and
     `RemoveConsumer(modId)` on dispose gives it its own line in GPU monitors instead of
     inflating "System".
+
+## 13. Provider slots: owning a question Core asks (0.10)
+
+`SynapseCoreProviders` is the registry for capabilities Core does not own: each slot has
+exactly one authoritative answerer, is pulled rather than pushed, and returns a value (the
+opposite of the broadcast hooks above). Every slot is a public static property registered by
+reflection so a producer builds and runs with Core absent, and every slot documents its
+unregistered value — consumers call the accessor, never the slot.
+
+```csharp
+var t = GenTypes.GetTypeInAnyAssembly("RimSynapse.SynapseCoreProviders");
+var slot = t?.GetProperty("TextToSpeech", BindingFlags.Public | BindingFlags.Static);
+slot?.SetValue(null, (Func<string, string, Action<byte[]>, bool>)MyEngine.Speak);
+```
+
+Current slots:
+
+*   **`PopulationDensity`** (`Func<int, int>`): dwellings on a world tile. Unregistered: 0.
+    Consumers call `PopulationDensityAt(tile)`.
+*   **`Residency`** (`Func<Pawn, bool>`): whether a pawn lives in a generated dwelling.
+    Unregistered: false. Consumers call `IsResident(pawn)`.
+*   **`TextToSpeech`** (`Func<string, string, Action<byte[]>, bool>`, 0.10): synthesise a
+    line as spoken audio — `(text, voiceHint, onPcm) => accepted`. Owned by Local Text to
+    Speech. Return quickly (synthesise on your own worker, never the calling thread) and
+    deliver 16-bit mono 24 kHz PCM to `onPcm`; Core routes it to playback, and `onPcm` is
+    safe to call from any thread. `voiceHint` is advisory (a Kokoro voice id or file path).
+    Unregistered: **no-op** — `SynapseSpeech.TrySpeak(text, voiceHint)` returns false and
+    nothing plays. A throwing provider is contained and logged; the line just goes unspoken.
+    Consumers call `SynapseSpeech.TrySpeak`, which hands your provider the request off the
+    caller's thread. Core's own call sites (storyteller chat replies, letter reactions) sit
+    behind default-off mod settings.

@@ -296,6 +296,14 @@ Examples:
                         if (result.success && !string.IsNullOrWhiteSpace(result.content))
                         {
                             string commentText = RimSynapse.Internal.Sanitizer.Clean(result.content).Trim();
+
+                            // Local TTS gets first claim when its toggle is on (Core #111); the
+                            // provider route below stays the fallback so an absent speech mod
+                            // changes nothing.
+                            if (RimSynapseMod.Instance.Settings.localTtsSpeakLetters
+                                && SynapseSpeech.TrySpeak(commentText, extension.localVoicePath))
+                                return;
+
                             var audioReq = new LlmAudioRequest
                             {
                                 InputText = commentText,
