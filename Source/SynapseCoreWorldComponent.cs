@@ -49,8 +49,8 @@ namespace RimSynapse
         /// <summary>
         /// Superseded by <see cref="SynapseCoreProviders.PopulationDensity"/>.
         ///
-        /// <para>Kept for one release as a compatibility shim: a build of Regions and Territories
-        /// made before the provider registry existed sets this field by reflection, and
+        /// <para>Kept for one release as a compatibility shim: a territory-mod build made before
+        /// the provider registry existed sets this field by reflection, and
         /// <c>SynapseCoreProviders.PopulationDensity</c> falls back to reading it when its own slot
         /// is empty. New registrations should target the slot, which logs and has a documented
         /// unregistered value; this field has neither.</para>

@@ -15,15 +15,12 @@ Core                      ← LLM client, request queue, tool registry, script r
 │   └── Conversations     ← in-game dialogue UI (requires Core + Psychology)
 │
 ├── Factions              ← faction motivations, diplomacy, population density, map modes
-├── Regions-and-Territories ← territory mechanics
 ├── WorldNews             ← planetary news feed and world events
-├── NVIDIA-Tool           ← GPU/VRAM stats feeding Core's hardware awareness
-│
-├── TestRunner            ← dev-only in-game test suite (loads last, needs -synapse-test)
-└── Repo-MCP              ← developer tooling: build/launch/log harness, external MCP server
+├── Local-Text-to-Speech  ← on-device speech synthesis (registers the TextToSpeech provider)
+└── NVIDIA-Tool           ← GPU/VRAM stats feeding Core's hardware awareness
 ```
 
-Storyteller mechanisms are embedded in Core — the separate RimSynapse-StoryTeller repo is deprecated. Companion repos commit their built `Assemblies/*.dll`; Core's DLLs ship as GitHub Release assets.
+Storyteller mechanisms are embedded in Core — the separate RimSynapse-StoryTeller repo is deprecated. In-game test cases live in each repo's `Source.Tests/`, run by the dev-tools toolkit's bridge mod under `-synapse-test`; the build/launch/log harness is the `rimworld-claude-dev-tools` repo. From 0.10 no repo commits built DLLs — every release ships an installable zip asset, with `Assemblies/CHECKSUMS.sha256` as the tracked record.
 
 ---
 
@@ -190,12 +187,12 @@ The log is machine-read by the test harness, so format matters:
 - Handled warnings must not look like thrown exceptions: log `[ExceptionTypeName] message`, never `ExceptionTypeName: message`.
 - Tool failures are error payloads, never exceptions; never log an error payload under a `[Result]` prefix.
 - Use `SynapseLogger.Message/Warning(msg, category)`; agent and performance lines use the `performance` category.
-- Every behavior change lands with an in-game TestRunner case (`<Repo>_<CaseName>`); the suite must end with 0 blocking entries. Case-writing rules live in the TestRunner repo.
+- Every behavior change lands with an in-game test case (`<Repo>_<CaseName>`) in the repo's `Source.Tests/`; the suite must end with 0 blocking entries. Case-writing rules live in the dev-tools repo's `modding-knowledge/07-in-game-tests.md`.
 
-The development loop (harness in the Repo-MCP repo):
+The development loop (harness in the `rimworld-claude-dev-tools` repo):
 
 ```powershell
-.\harness\build.ps1              # all mods, dependency order: Core -> Regions -> companions -> Factions
+.\harness\build.ps1              # all mods, dependency order: Core -> companions -> Factions
 .\harness\launch.ps1 -Test       # rotates Player.log, runs the in-game suite, self-terminates
 .\harness\readlog.ps1            # classifies the log; exit 1 on blocking entries or FAILed cases
 ```

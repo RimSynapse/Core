@@ -13,7 +13,7 @@ namespace RimSynapse.Compat
     /// opt-in "update available" check (Steam Workshop / GitHub) is a separate slice.
     ///
     /// This lives in Core because Core is the version everything else pins to. Companion mods that
-    /// run without Core (e.g. Regions-and-Territories) ship their own minimal self-tracker instead.
+    /// run without Core ship their own minimal self-tracker instead.
     /// </summary>
     public static class SynapseCompatChecker
     {
