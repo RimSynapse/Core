@@ -2,6 +2,10 @@
 
 Full version history for RimSynapse - Core. The mod page and Workshop description show only the latest release; every earlier version is recorded here.
 
+## v0.9.2 - Packaging fix
+- FIX - The v0.9.1 GitHub release archive (`Core-0.9.1.zip`) shipped with an `Assemblies/` folder containing only `CHECKSUMS.sha256` and no DLLs, because `package-release.ps1` silently skipped DLL injection when the local `Assemblies/` was empty at package time. A fresh GitHub/RimSort install of Core 0.9.1 therefore had no `RimSynapseCore.dll`; companion mods that ship their own assembly (Psychology, Conversations, Factions, WorldNews) then referenced Core types the absent assembly could not provide, and Prepatcher's `FreePatcher.FindAllFreePatches` -> `Assembly.GetTypes()` threw a fatal `ReflectionTypeLoadException`. v0.9.2 re-releases the identical code with the assembly correctly packaged. No gameplay changes; Steam Workshop installs of v0.9.1 were unaffected.
+- Internal - `package-release.ps1` now fails the run if a staged zip is missing any DLL listed in its `CHECKSUMS.sha256`, so a hollow archive can never ship again (see Core#117).
+
 ## v0.9.1 - Fixes and the Speech Surface
 - FIX - Ambient dialogue no longer leaks raw job defNames: a labelless job such as `GotoWander` fell through to its raw defName and surfaced in Conversations dialogue as "the gotowander they've been busy with". Jobs are now humanized through a label -> clean reportString -> spaced-camelCase fallback that never emits a raw defName.
 - SAFETY - The mutating-tool manifest is complete: nine previously-unflagged state-changing tools are now flagged as mutating, so an autonomous run cannot invoke them unless `allowAutonomousMutations` is set.
