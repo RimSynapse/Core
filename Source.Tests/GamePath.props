@@ -1,0 +1,19 @@
+<!--
+    GamePath.props - locates the game, Harmony, the RimAgentic toolkit (test framework),
+    and locally built sibling-mod assemblies. Mirrors Source\GamePath.props.
+-->
+<Project>
+    <PropertyGroup>
+        <RimWorldPath>C:\Program Files (x86)\Steam\steamapps\common\RimWorld</RimWorldPath>
+        <SteamWorkshopPath>C:\Program Files (x86)\Steam\steamapps\workshop\content\294100</SteamWorkshopPath>
+        <HarmonyPath>$(SteamWorkshopPath)\2009463077\Current\Assemblies</HarmonyPath>
+        <RimAgenticAssembly>..\..\..\rimworld-claude-dev-tools\game-mod\Assemblies</RimAgenticAssembly>
+        <RimSynapseCoreAssembly>..\..\Core\Assemblies</RimSynapseCoreAssembly>
+        <RimSynapseRegionsAssembly>..\..\Regions-and-Territories\Assemblies</RimSynapseRegionsAssembly>
+        <RimSynapseLivingWorldAssembly>..\..\LivingWorld\Assemblies</RimSynapseLivingWorldAssembly>
+        <RimSynapsePsychologyAssembly>..\..\Psychology\Assemblies</RimSynapsePsychologyAssembly>
+        <RimSynapseConversationsAssembly>..\..\Conversations\Assemblies</RimSynapseConversationsAssembly>
+        <RimSynapseWorldNewsAssembly>..\..\WorldNews\Assemblies</RimSynapseWorldNewsAssembly>
+        <RimSynapseFactionsAssembly>..\..\Factions\Assemblies</RimSynapseFactionsAssembly>
+    </PropertyGroup>
+</Project>
