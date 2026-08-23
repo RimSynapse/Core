@@ -30,3 +30,6 @@ game_state.json
 game_state_request.json
 storyteller_input.txt
 storyteller_output.log
+
+# Built assemblies ship as release zip assets, never in git (Core#110)
+Assemblies/*.dll

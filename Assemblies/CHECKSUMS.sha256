@@ -1,6 +1,6 @@
 # RimSynapse Core — shipped assembly manifest
 # version: 0.9.0
-# commit:  dc83f14 (working tree had other uncommitted changes)
+# commit:  764092a
 # format:  sha256sum — verify with 'verify-binaries.ps1' or 'sha256sum -c'
 e1e27af7b07eeedf5ce71a9255f0422816a6fc5849a483c6714e1b472044fa9d  Newtonsoft.Json.dll
 b96910e76971bb3927118eff4525f0c45832dcde42669fa4d21f508ded9db574  RimSynapseCore.dll
