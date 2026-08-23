@@ -90,11 +90,16 @@ namespace RimSynapse
                     // record here exercises the real save path so that autotest can pass.
                     mockContent = "{\n  \"overallRecord\": \"The colony gathered beneath a grey sky to mark the passing. Words were spoken, heads were bowed, and for a moment the endless work of survival paused.\",\n  \"eulogies\": [\n    { \"speaker\": \"A mourner\", \"text\": \"They were steady when it counted. We are the lesser for the loss.\" }\n  ],\n  \"comments\": [\n    { \"commenter\": \"An attendee\", \"text\": \"It was a fitting sending-off.\" }\n  ],\n  \"pawnMemories\": {}\n}";
                 }
-                else if (sysMsgLower.Contains("childhood") || userMsgLower.Contains("childhood"))
+                // Match on the memory-writer's distinctive SYSTEM phrase ("describing their childhood/
+                // adulthood"), NOT a bare "childhood"/"adulthood" substring: the adulthood-memory and
+                // personality-profile prompts embed the already-generated childhood memory as context in
+                // their USER message, so a userMsg substring check mis-routed both to this childhood branch
+                // (duplicating the childhood text as the adulthood memory and leaving personalitySummary empty).
+                else if (sysMsgLower.Contains("describing their childhood"))
                 {
                     mockContent = "{\n  \"Memory\": \"I spent my childhood digging trenches and learning the names of wild plants. My hands were always calloused, but I found peace in the quiet woods.\",\n  \"Hometown\": \"Kharstead\",\n  \"Tags\": [\"Origin\", \"Childhood\", \"Plants\"],\n  \"EmotionalTone\": \"neutral\"\n}";
                 }
-                else if (sysMsgLower.Contains("adulthood") || userMsgLower.Contains("adulthood"))
+                else if (sysMsgLower.Contains("describing their adulthood"))
                 {
                     mockContent = "{\n  \"Memory\": \"As an adult, I worked the heavy machinery in the logging camps. One winter, the heating failed, and we survived by felling wood.\",\n  \"Tags\": [\"Adulthood\", \"Plants\", \"Survival\"],\n  \"EmotionalTone\": \"determined\"\n}";
                 }
