@@ -98,6 +98,14 @@ namespace RimSynapse
                 {
                     mockContent = "{\n  \"Memory\": \"As an adult, I worked the heavy machinery in the logging camps. One winter, the heating failed, and we survived by felling wood.\",\n  \"Tags\": [\"Adulthood\", \"Plants\", \"Survival\"],\n  \"EmotionalTone\": \"determined\"\n}";
                 }
+                else if (sysMsgLower.Contains("how they speak"))
+                {
+                    // Voice derive (Conversations#33). The personality-profile mock below intentionally
+                    // omits a Voice block, so a mock colonist reaches the lazy voice backfill in a stranded
+                    // state (personalitySummary set, voiceProfile empty). Returning a real style here lets
+                    // the autotest exercise the whole backfill path instead of leaving voiceProfile empty.
+                    mockContent = "{\n  \"style\": \"Terse and practical; short sentences; states facts and skips pleasantries.\",\n  \"pace\": \"measured\",\n  \"timbre\": \"flat\"\n}";
+                }
                 else if (sysMsgLower.Contains("psychology") || sysMsgLower.Contains("profile") || userMsgLower.Contains("profile") || userMsgLower.Contains("synthesize"))
                 {
                     mockContent = "{\n  \"Personality\": \"A quiet and pragmatic individual who values survival. They are driven by practical results.\",\n  \"JungianType\": \"ISTJ\",\n  \"CoreArchetype\": \"Explorer\",\n  \"Temperament\": \"Phlegmatic\",\n  \"FirstImpression\": \"I've arrived. Let's get to work.\",\n  \"LeadershipStyle\": \"Rules through pragmatism and a focus on survival resources.\"\n}";
