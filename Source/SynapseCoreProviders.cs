@@ -163,6 +163,45 @@ namespace RimSynapse
         }
 
         // ---------------------------------------------------------------------------------------
+        // Text-to-speech — owned by RimSynapse - Local Text to Speech.
+        // ---------------------------------------------------------------------------------------
+
+        private static Func<string, string, Action<byte[]>, bool> textToSpeech;
+
+        /// <summary>
+        /// Synthesise a line of text as spoken audio. Owned by Local Text to Speech, which is the
+        /// only mod that runs a synthesis engine (Kokoro/ONNX).
+        ///
+        /// <para><b>Contract:</b> <c>(text, voiceHint, onPcm) => accepted</c>. The provider must
+        /// return quickly — synthesis happens on the provider's own worker, never on the calling
+        /// thread — and deliver 16-bit mono 24 kHz PCM to <c>onPcm</c> when done (the same format
+        /// <see cref="Utils.AudioPlaybackManager"/> plays; Core routes delivery to playback and
+        /// <c>onPcm</c> is safe to call from any thread). <c>voiceHint</c> is advisory — a Kokoro
+        /// voice id (<see cref="KokoroVoices"/>) or a file path — and the provider may ignore it.
+        /// Returning false means the request was refused (engine not ready, text rejected); nothing
+        /// will be delivered.</para>
+        ///
+        /// <para><b>Unregistered value: no-op.</b> <see cref="SynapseSpeech.TrySpeak(string)"/>
+        /// returns false and no audio plays — silence, exactly as if the speech mod were not
+        /// installed. Consumers call the accessor, never this slot.</para>
+        /// </summary>
+        public static Func<string, string, Action<byte[]>, bool> TextToSpeech
+        {
+            get { return textToSpeech; }
+            set { textToSpeech = value; NoteRegistration("TextToSpeech", value); }
+        }
+
+        /// <summary>Accessor-side read with the once-only unregistered note. Used by
+        /// <see cref="SynapseSpeech"/>; consumers go through that, not this.</summary>
+        internal static Func<string, string, Action<byte[]>, bool> TextToSpeechOrNote()
+        {
+            var provider = textToSpeech;
+            if (provider == null)
+                NoteUnregistered("TextToSpeech", "speech requests are silent no-ops");
+            return provider;
+        }
+
+        // ---------------------------------------------------------------------------------------
         // Legacy
         // ---------------------------------------------------------------------------------------
 
