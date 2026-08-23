@@ -9,7 +9,6 @@
         <HarmonyPath>$(SteamWorkshopPath)\2009463077\Current\Assemblies</HarmonyPath>
         <RimAgenticAssembly>..\..\..\rimworld-claude-dev-tools\game-mod\Assemblies</RimAgenticAssembly>
         <RimSynapseCoreAssembly>..\..\Core\Assemblies</RimSynapseCoreAssembly>
-        <RimSynapseRegionsAssembly>..\..\Regions-and-Territories\Assemblies</RimSynapseRegionsAssembly>
         <RimSynapseLivingWorldAssembly>..\..\LivingWorld\Assemblies</RimSynapseLivingWorldAssembly>
         <RimSynapsePsychologyAssembly>..\..\Psychology\Assemblies</RimSynapsePsychologyAssembly>
         <RimSynapseConversationsAssembly>..\..\Conversations\Assemblies</RimSynapseConversationsAssembly>

@@ -143,13 +143,13 @@ reference assemblies, which are not available there. **Run it by hand before eve
 **Two things CI does not catch, so do not read a green run as more than it is:**
 
 - `verify-metadata.ps1` checks that the three version locations agree with *each other*,
-  not that they agree with the source tree. Regions-and-Territories passes the gate today
-  while declaring `0.6.2` over a 0.7 source tree — internally consistent, and wrong. A
-  version bump is still a human decision at cut time.
+  not that they agree with the source tree. A repo has passed the gate while declaring
+  `0.6.2` over a 0.7 source tree — internally consistent, and wrong. A version bump is
+  still a human decision at cut time.
 - `sync-wiki.ps1` **skips** a repo whose wiki has never been initialised, and a skip is a
-  pass. Regions-and-Territories, NVIDIA-Tool and TestRunner are skipped today. GitHub only
-  creates the wiki repo after the first page is made in the web UI, so an uninitialised
-  wiki is invisible to the gate rather than caught by it.
+  pass. NVIDIA-Tool is skipped today. GitHub only creates the wiki repo after the first
+  page is made in the web UI, so an uninitialised wiki is invisible to the gate rather
+  than caught by it.
 
 ## Binary compatibility (the rule that broke three mods)
 
@@ -198,9 +198,9 @@ Rules for provider slots:
   are read from storyteller weighting passes, so a per-call log line is a performance
   bug as well as noise.
 - A throwing provider is contained and logged — it must not take its caller down.
-- Producers log all three branches: registered / member missing / Core absent. See
-  `RegionsAndTerritoriesMod.TryRegisterPopulationDelegate`, which is the reference
-  implementation.
+- Producers log all three branches: registered / member missing / Core absent. The
+  producer-side pattern is documented in `docs/COMPANION_MODS.md` §13 (the former
+  in-org reference implementation migrated out with the territory mod).
 
 Deprecating a slot follows the binary-compatibility rule above: keep the old member as
 a forwarding shim for one release and mark it `[Obsolete]` — see
@@ -216,7 +216,7 @@ settings, local copy at `C:\github\rimworld-claude-dev-tools` — this was forke
 `Repo-MCP`); the in-game suite is the `TestRunner` repo (loads last, only active with `-synapse-test`).
 
 ```powershell
-.\harness\build.ps1              # all mods, dependency order: Core -> Regions -> companions -> Factions
+.\harness\build.ps1              # all mods, dependency order: Core -> companions -> Factions
 .\harness\launch.ps1 -Test       # rotates Player.log, runs the TestRunner, self-terminates on SUMMARY
 .\harness\readlog.ps1            # classifies the log; exit 1 on blocking entries or FAILed cases
 ```
@@ -282,7 +282,7 @@ the path.
   it that way if you touch `Patch_Log_Error.Mark`; (2) this made previously-invisible
   errors visible, so a first run after a Core rebuild can surface a real error that older
   "0 blocking" runs hid — triage it, do not re-hide it in the classifier. It surfaced
-  R&T#46 (183 world-gen `Faction.OfPlayer` calls) on its first outing. Errors logged
+  183 world-gen `Faction.OfPlayer` calls in a companion on its first outing. Errors logged
   before `harmony.PatchAll()` are unmarked; the load-order check runs first by design and
   carries its own token.
 - **Querying `Faction.OfPlayer` when it can be null spams a `Log.Error` each time** —
@@ -363,7 +363,6 @@ Run these in order. Every step exists because skipping it has shipped a defect.
    | Conversations | 3768363934 |
    | Factions | 3767279097 |
    | WorldNews | 3768365293 |
-   | Regions-and-Territories | 3768364266 |
    | NVIDIA-Tool | 3760830285 |
    | AuraAlgorithm | 3768364958 |
 8. **Tell the user to upload the new builds** through the in-game uploader (Core first —
@@ -432,8 +431,8 @@ entry for the current version, or when About.xml stops being well-formed.
   gate is what finds it, because nothing else will.
 - The discipline the PR was standing in for still applies, and it is the important part:
   **build, run the full suite, and confirm `0 blocking` before pushing.** Multi-repo
-  changes must land in dependency order (Core → Regions → companions → Factions →
-  TestRunner) so a mid-sequence build is never broken.
+  changes must land in dependency order (Core → companions → Factions) so a
+  mid-sequence build is never broken.
 - `main` only via release promotion PRs — that gate is real, because it marks a release.
 - Versioning is `0.<iteration>.<minor>`; never plan or tag anything `1.0`.
 - Built `Assemblies/*.dll` are never committed (from 0.10 — #110); the tracked record is

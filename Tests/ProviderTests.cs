@@ -111,7 +111,7 @@ namespace ProviderTests
             var popSlot = type.GetProperty("PopulationDensity", BindingFlags.Public | BindingFlags.Static);
             Check("the population slot resolves too", popSlot != null && popSlot.CanWrite);
 
-            Section("the legacy field still works for a pre-registry build of R&T");
+            Section("the legacy field still works for a pre-registry territory-mod build");
             Reset();
 #pragma warning disable 618
             SynapseCoreWorldComponent.GetPopulationDensityDelegate = tile => 12;
