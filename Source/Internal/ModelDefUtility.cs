@@ -68,23 +68,27 @@ namespace RimSynapse.Internal
         {
             if (provider == ApiProvider.Local_LMStudio)
             {
-                var result = HttpEngine.GetModelsSync();
-                ModelManager.UpdateCache(result);
-                
-                List<FloatMenuOption> options = new List<FloatMenuOption>();
-                if (result.online && result.modelIds != null)
+                // Fetch models off the main thread; ModelManager runs the query on a background
+                // thread and invokes this callback back on the main thread (updating its cache
+                // along the way), so opening the selector never freezes the game while LM Studio
+                // responds or spins a model back up (Core#120).
+                ModelManager.GetModels(result =>
                 {
-                    foreach (var am in result.modelIds)
+                    List<FloatMenuOption> options = new List<FloatMenuOption>();
+                    if (result.online && result.modelIds != null)
                     {
-                        string localM = am;
-                        options.Add(new FloatMenuOption(localM, () => onSelect(localM)));
+                        foreach (var am in result.modelIds)
+                        {
+                            string localM = am;
+                            options.Add(new FloatMenuOption(localM, () => onSelect(localM)));
+                        }
                     }
-                }
-                if (options.Count == 0)
-                {
-                    options.Add(new FloatMenuOption("No models found", null));
-                }
-                Find.WindowStack.Add(new FloatMenu(options));
+                    if (options.Count == 0)
+                    {
+                        options.Add(new FloatMenuOption("No models found", null));
+                    }
+                    Find.WindowStack.Add(new FloatMenu(options));
+                });
             }
             else
             {
