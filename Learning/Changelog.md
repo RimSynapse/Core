@@ -2,6 +2,10 @@
 
 Full version history for RimSynapse - Core. The mod page and Workshop description show only the latest release; every earlier version is recorded here.
 
+## v0.9.3 - No more freezes on mental breaks
+- FIX - Dynamic mental-break resolution no longer freezes the game (Core#120). The `trigger_colonist_break` tool handler runs on the main thread; its second-stage context-stripped "isolated solver" made a blocking LLM HTTP call inline, so the whole game paused for the full duration of that call - up to the backend's response/model-reload time. The solver now runs on a background thread (`SynapseToolRegistry.DispatchBreakResolution`) and the resolved break action is applied from a main-thread completion callback. The tool returns a `dispatched` status immediately.
+- FIX - `ModelDefUtility.ShowModelSelector` fetched the LM Studio model list with a synchronous `GetModelsSync` on the main thread, briefly freezing the settings UI; it now fetches off the main thread via `ModelManager.GetModels` and opens the menu from the main-thread callback.
+
 ## v0.9.2 - Packaging fix
 - FIX - The v0.9.1 GitHub release archive (`Core-0.9.1.zip`) shipped with an `Assemblies/` folder containing only `CHECKSUMS.sha256` and no DLLs, because `package-release.ps1` silently skipped DLL injection when the local `Assemblies/` was empty at package time. A fresh GitHub/RimSort install of Core 0.9.1 therefore had no `RimSynapseCore.dll`; companion mods that ship their own assembly (Psychology, Conversations, Factions, WorldNews) then referenced Core types the absent assembly could not provide, and Prepatcher's `FreePatcher.FindAllFreePatches` -> `Assembly.GetTypes()` threw a fatal `ReflectionTypeLoadException`. v0.9.2 re-releases the identical code with the assembly correctly packaged. No gameplay changes; Steam Workshop installs of v0.9.1 were unaffected.
 - Internal - `package-release.ps1` now fails the run if a staged zip is missing any DLL listed in its `CHECKSUMS.sha256`, so a hollow archive can never ship again (see Core#117).

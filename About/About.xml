@@ -4,7 +4,7 @@
     <author>RimSynapse Team</author>
     <packageId>RimSynapse.Core</packageId>
     <url>https://github.com/RimSynapse/Core</url>
-    <modVersion>0.9.2</modVersion>
+    <modVersion>0.9.3</modVersion>
     <supportedVersions>
         <li>1.5</li>
         <li>1.6</li>
@@ -30,7 +30,7 @@
     </incompatibleWith>
     <description>
 Discord Community: https://discord.gg/eVBebZ2N9s
-Version: v0.9.2 (Target: RimWorld 1.6)
+Version: v0.9.3 (Target: RimWorld 1.6)
 
 RimSynapse - Core
 Official Wiki and Documentation: https://github.com/RimSynapse/Core/wiki
@@ -63,6 +63,10 @@ AI is incredibly cool, and having a framework to utilize powerful, no-cost local
 0.10 - Aura Persona and Foresight: the persona-def-driven storyteller voice, agentic narrate/forecast flows, and LLM-driven quest generation.
 0.11 - Localization and Hardening: externalising every user-facing string so the framework and its modules can be translated.
 These ship when they are ready - no dates.
+
+--- Changelog (v0.9.3) - No more freezes on mental breaks ---
+- FIX - Dynamic mental-break resolution no longer freezes the game. The break tool ran its second-stage "isolated solver" LLM call on the main thread, so the whole game paused for the length of that call - as long as your LLM backend took to respond or reload a model. The solver now runs on a background thread and the break action applies when it returns.
+- FIX - Opening the model selector in Mod Settings no longer briefly freezes while it queries LM Studio; the model list is now fetched off the main thread.
 
 --- Changelog (v0.9.2) - Packaging fix ---
 - FIX - The v0.9.1 GitHub/RimSort release archive shipped without RimSynapseCore.dll, so a fresh install from GitHub had no Core assembly and companion mods aborted loading (Prepatcher "ReflectionTypeLoadException"). v0.9.2 re-releases the same code with the assembly correctly included. No gameplay changes; Steam Workshop installs were unaffected.
