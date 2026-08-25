@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Verse;
+using RimWorld;
 
 namespace RimSynapse
 {
@@ -163,6 +164,46 @@ namespace RimSynapse
                 SynapseLogger.Error($"[RimSynapse-Core] Provider 'Residency' threw: {ex}", LogCategory);
                 return false;
             }
+        }
+
+        // ---------------------------------------------------------------------------------------
+        // Conversation participation — who the colony has a standing relationship with, and so may
+        // take part in RimSynapse conversations. Pure vanilla state, no provider slot: Core owns the
+        // question so Conversations (#41) and its outsider passes (#52/#53) agree on one answer.
+        // Deliberately a SUPERSET of Psychology's IsEligibleForReview — it also counts adopted
+        // residents (LivingWorld), because an adopted resident belongs in colony chatter even though
+        // the clinical review does not spend an LLM call on them. The two predicates answer different
+        // questions and are allowed to differ.
+        // ---------------------------------------------------------------------------------------
+
+        /// <summary>Whether <paramref name="pawn"/> may take part in colony conversations: any spawned,
+        /// living humanlike the colony has a standing relationship with — its colonists, its prisoners
+        /// and slaves, quest lodgers staying with it, and adopted residents. NOT raiders, passing
+        /// traders, or unaffiliated visitors (handled separately by the outsider line-bank pass).
+        /// Cheap enough to call per-pawn per scan.</summary>
+        public static bool MayConverse(Pawn pawn)
+        {
+            if (pawn == null || pawn.Dead || !pawn.Spawned) return false;
+            if (pawn.RaceProps == null || !pawn.RaceProps.Humanlike) return false;
+            return pawn.IsColonist
+                || pawn.IsPrisonerOfColony
+                || pawn.IsSlaveOfColony
+                || pawn.IsQuestLodger()
+                || IsResident(pawn);
+        }
+
+        /// <summary>One-word role for a conversing pawn, for gizmo labels, prompt framing and debug
+        /// output: "colonist" | "prisoner" | "slave" | "guest" | "resident", or "outsider" if they may
+        /// not converse. Colonist takes priority where a pawn matches more than one.</summary>
+        public static string ConversationRole(Pawn pawn)
+        {
+            if (pawn == null) return "none";
+            if (pawn.IsColonist) return "colonist";
+            if (pawn.IsPrisonerOfColony) return "prisoner";
+            if (pawn.IsSlaveOfColony) return "slave";
+            if (pawn.IsQuestLodger()) return "guest";
+            if (IsResident(pawn)) return "resident";
+            return "outsider";
         }
 
         // ---------------------------------------------------------------------------------------
