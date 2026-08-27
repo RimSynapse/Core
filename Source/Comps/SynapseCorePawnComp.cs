@@ -1029,6 +1029,28 @@ namespace RimSynapse.Comps
         }
 
         /// <summary>
+        /// Meal INDULGENCE over roughly the last day (Psychology #62-adjacent Gourmand wiring): the count of
+        /// fine/lavish "ate a good meal" mood memories still recent (age &lt; one day). A pawn who repeatedly
+        /// eats — and enjoys — high-quality food is developing a taste for it; Psychology folds this into the
+        /// Gourmand signal (× the mood response), the same behaviour × reinforcement shape as every other trait.
+        /// Raw fact only. Nutrient paste / raw / awful meals are deliberately excluded — indulgence, not hunger.
+        /// </summary>
+        public static int MealIndulgenceToday(Pawn pawn)
+        {
+            var mem = pawn?.needs?.mood?.thoughts?.memories?.Memories;
+            if (mem == null) return 0;
+            int count = 0;
+            for (int i = 0; i < mem.Count; i++)
+            {
+                var m = mem[i];
+                if (m?.def == null || m.age > GenDate.TicksPerDay) continue;
+                string d = m.def.defName;
+                if (d == "AteLavishMeal" || d == "AteFineMeal") count++;
+            }
+            return count;
+        }
+
+        /// <summary>
         /// Detect skill rust and refresh the daily snapshot. A skill is "rusting" when it is expert-level
         /// (>= <paramref name="expertLevel"/>) and has either dropped a level since the last snapshot, or
         /// lost xp-toward-next-level while going unpractised today (xpSinceMidnight ~ 0). Returns the rusting
