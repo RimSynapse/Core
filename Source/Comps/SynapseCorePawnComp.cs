@@ -49,6 +49,11 @@ namespace RimSynapse.Comps
         // engine — a trait needs the behaviour AND a positive mood response to it. -1 = uninitialised.
         public float moodBaseline = -1f;
 
+        // Rolling personal-wealth baseline (EMA of daily individual wealth) for the FORTUNE dimension: is
+        // this pawn's personal fortune rising? Bloodlust reinforcement (Psychology #54) is "killing that
+        // pays off" — kills while wealth+mood climb, not desperate survival killing. -1 = uninitialised.
+        public float wealthBaseline = -1f;
+
         // Grounding history tracking fields
         public List<string> recentLocations = new List<string>();
         public List<JobInterval> recentJobs = new List<JobInterval>();
@@ -124,7 +129,8 @@ namespace RimSynapse.Comps
             Scribe_Collections.Look(ref skillXpSinceLevelSnapshot, "skillXpSinceLevelSnapshot", LookMode.Value, LookMode.Value);
             Scribe_Values.Look(ref lastSkillSnapshotTick, "lastSkillSnapshotTick", 0L);
             Scribe_Values.Look(ref moodBaseline, "moodBaseline", -1f);
-            
+            Scribe_Values.Look(ref wealthBaseline, "wealthBaseline", -1f);
+
             Scribe_Collections.Look(ref recentLocations, "recentLocations", LookMode.Value);
             Scribe_Collections.Look(ref recentJobs, "recentJobs", LookMode.Deep);
             Scribe_Values.Look(ref lastJobDefName, "lastJobDefName");
@@ -1076,6 +1082,30 @@ namespace RimSynapse.Comps
             return delta;
         }
 
+        /// <summary>
+        /// The FORTUNE dimension (Psychology #54): fold today's individual wealth into a rolling baseline (EMA)
+        /// and return whether the pawn's personal fortune is rising, in [-1, +1]. Positive = wealthier than
+        /// their recent norm (life getting better); negative = poorer. First call only seeds and returns 0.
+        /// <paramref name="scale"/> is the fractional wealth swing that maps to a full ±1 (default 25%), so a
+        /// pawn steadily accruing loot reads as rising fortune without a single windfall pinning it.
+        /// </summary>
+        public float UpdateWealthBaselineAndGetReinforcement(float todayWealth, float scale = 0.25f)
+        {
+            if (todayWealth < 0f) todayWealth = 0f;
+            if (wealthBaseline < 0f)
+            {
+                wealthBaseline = todayWealth; // first day: seed only, no trend yet
+                return 0f;
+            }
+            // Relative change vs the baseline, so the signal is scale-free across rich and poor colonies.
+            float denom = wealthBaseline > 1f ? wealthBaseline : 1f;
+            float s = scale <= 0f ? 0.25f : scale;
+            float delta = ((todayWealth - wealthBaseline) / denom) / s;
+            if (delta > 1f) delta = 1f; else if (delta < -1f) delta = -1f;
+            wealthBaseline = 0.9f * wealthBaseline + 0.1f * todayWealth;
+            return delta;
+        }
+
         private static RoomStatDef _wealthRoomStat;
 
         // Per-map daily cache for the colony wealth average. The average is identical for every pawn on a
@@ -1133,6 +1163,45 @@ namespace RimSynapse.Comps
             _colonyWealthDay[map.uniqueID] = today;
             _colonyWealthAvg[map.uniqueID] = avg;
             return avg;
+        }
+
+        /// <summary>
+        /// Kill DOMINANCE (Psychology #54): how much this pawn OUT-KILLS their fellow colonists, in [0,1].
+        /// It is the pawn's share of the colony's total lifetime humanlike kills, with a bonus when they are
+        /// the single top killer — the mark of a colony's dedicated warrior rather than one of many hands in a
+        /// survival scramble. Returns 0 for a pawn who has never killed, or when the colony has no kills at all.
+        /// Raw fact only (kills come from vanilla records); Psychology decides what it means for Bloodlust.
+        /// </summary>
+        public static float KillDominance(Pawn pawn)
+        {
+            if (pawn?.Map == null) return 0f;
+            int mine = pawn.records?.GetAsInt(RecordDefOf.KillsHumanlikes) ?? 0;
+            if (mine <= 0) return 0f;
+
+            var colonists = pawn.Map.mapPawns.FreeColonists.ToList();
+            long total = 0;
+            int best = 0;
+            foreach (var c in colonists)
+            {
+                int k = c.records?.GetAsInt(RecordDefOf.KillsHumanlikes) ?? 0;
+                total += k;
+                if (k > best) best = k;
+            }
+            return KillDominanceOf(mine, total, best, colonists.Count);
+        }
+
+        /// <summary>
+        /// The pure kill-dominance math (#54), split out so it is unit-testable without a live colony. A pawn's
+        /// share of colony humanlike kills, with a +0.25 bonus when they are the single top killer (rank 1 in a
+        /// colony of more than one). Clamped to [0,1]; 0 when the pawn or the colony has no kills.
+        /// </summary>
+        public static float KillDominanceOf(int mine, long colonyTotalKills, int colonyBestKills, int colonistCount)
+        {
+            if (mine <= 0 || colonyTotalKills <= 0) return 0f;
+            float share = (float)mine / colonyTotalKills;
+            bool isTopKiller = mine >= colonyBestKills && colonistCount > 1;
+            float dominance = isTopKiller ? System.Math.Min(1f, share + 0.25f) : share;
+            return dominance < 0f ? 0f : (dominance > 1f ? 1f : dominance);
         }
 
         // Reflection into PlayLogEntry_Interaction's protected initiator/intDef — resolved once, and if it
