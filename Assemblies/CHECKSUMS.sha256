@@ -1,8 +1,8 @@
 # RimSynapse Core — shipped assembly manifest
-# version: 0.9.1
-# commit:  d651e1c (working tree had other uncommitted changes)
+# version: 0.9.3
+# commit:  7365ed9 (working tree had other uncommitted changes)
 # format:  sha256sum — verify with 'verify-binaries.ps1' or 'sha256sum -c'
 e1e27af7b07eeedf5ce71a9255f0422816a6fc5849a483c6714e1b472044fa9d  Newtonsoft.Json.dll
-7c46ea7d488d5bd25fdd83019863bc1c0fa1181c7a07794fffd7094afff5ccf8  RimSynapseCore.dll
+d1ca0f588f9e99edccbfff12818a2414d6c3a22162be5d4d7356602d169eab1f  RimSynapseCore.dll
 08cbd7278b66f1e68425a82d4b97181a4130d93e3dd91831407aba7212ccdacf  System.Runtime.CompilerServices.Unsafe.dll
 af4e13ef418fd89b432de20cd1dfb7fa10a7179c8dd049c9856316e50c5949ca  System.Threading.Tasks.Extensions.dll

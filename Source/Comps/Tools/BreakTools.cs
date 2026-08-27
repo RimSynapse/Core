@@ -83,29 +83,18 @@ namespace RimSynapse
                         bool disableStripping = RimSynapseMod.Instance.Settings.disableSafetyContextStripping;
                         string abstractReason = disableStripping ? rawReason : AbstractifyText(rawReason);
 
-                        // Call the isolated solver
-                        var solverResult = CallIsolatedSolver(abstractReason, targetPawnName, targetX, targetZ, disableStripping, pawnName);
-                        if (!solverResult.success)
-                        {
-                            return solverResult.errorJson;
-                        }
-
-                        // Execute the resolved action
-                        string msg = "";
-                        bool actionExecuted = ExecuteBreakAction(pawn, solverResult.action, targetPawnName, targetX, targetZ, out msg);
-
-                        try
-                        {
-                            System.IO.File.Delete(filePath);
-                        }
-                        catch {}
+                        // Dispatch the isolated solver OFF the main thread. The solver makes a
+                        // blocking LLM HTTP call; running it inline here would freeze the game for
+                        // the full duration of that call (Core#120), which is exactly what a
+                        // main-thread tool handler must never do. The break action is applied from
+                        // the completion callback, back on the main thread.
+                        DispatchBreakResolution(pawn, abstractReason, targetPawnName, targetX, targetZ, disableStripping, pawnName, filePath);
 
                         return JsonConvert.SerializeObject(new
                         {
                             success = true,
-                            action = solverResult.action,
-                            gameMessage = msg,
-                            orderedJobStatus = actionExecuted
+                            status = "dispatched",
+                            message = $"Break resolution for {pawnName} dispatched; the isolated solver runs asynchronously and the action applies on completion."
                         });
                     }
                     catch (Exception ex)
@@ -216,6 +205,56 @@ Decide conflict resolution.";
             }
 
             return new SolverResult { success = true, action = action };
+        }
+
+        /// <summary>
+        /// Runs the isolated break solver on a background thread and applies the resolved action
+        /// on the main thread when it returns. The solver's LLM call is blocking, so it must never
+        /// run on the caller's (main) thread — see Core#120. Safe to call from a main-thread tool
+        /// handler: it returns immediately.
+        /// </summary>
+        internal static void DispatchBreakResolution(Pawn pawn, string abstractReason, string targetPawnName,
+            int? targetX, int? targetZ, bool disableStripping, string pawnName, string filePathToDelete)
+        {
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                SolverResult solverResult;
+                try
+                {
+                    solverResult = CallIsolatedSolver(abstractReason, targetPawnName, targetX, targetZ, disableStripping, pawnName);
+                }
+                catch (Exception ex)
+                {
+                    solverResult = new SolverResult { success = false, errorJson = ex.Message };
+                }
+
+                RimSynapse.SynapseGameComponent.Enqueue(() =>
+                {
+                    try
+                    {
+                        if (!solverResult.success)
+                        {
+                            SynapseLogger.Warning($"[RimSynapse] Break resolution for {pawnName} failed: {solverResult.errorJson}");
+                        }
+                        else if (pawn == null || pawn.Dead || !pawn.Spawned)
+                        {
+                            SynapseLogger.Message($"[RimSynapse] Break resolution for {pawnName} skipped: pawn no longer valid when the solver returned.");
+                        }
+                        else
+                        {
+                            bool actionExecuted = ExecuteBreakAction(pawn, solverResult.action, targetPawnName, targetX, targetZ, out string msg);
+                            SynapseLogger.Message($"[RimSynapse] Break resolution for {pawnName}: action={solverResult.action}, executed={actionExecuted}. {msg}");
+                        }
+                    }
+                    finally
+                    {
+                        if (!string.IsNullOrEmpty(filePathToDelete))
+                        {
+                            try { System.IO.File.Delete(filePathToDelete); } catch {}
+                        }
+                    }
+                });
+            });
         }
 
         private static bool ExecuteBreakAction(Pawn pawn, string action, string targetPawnName, int? targetX, int? targetZ, out string msg)

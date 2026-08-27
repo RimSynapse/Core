@@ -72,14 +72,16 @@ namespace RimSynapse
         }
 
         // ---------------------------------------------------------------------------------------
-        // Population density — owned by RimSynapse - Regions and Territories.
+        // Population density — owned by the territory mod (Regions and Societies, maintained
+        // outside RimSynapse).
         // ---------------------------------------------------------------------------------------
 
         private static Func<int, int> populationDensity;
 
         /// <summary>
-        /// How many pawn dwellings stand on a world tile. Owned by Regions and Territories, which
-        /// is the only mod that generates them.
+        /// How many pawn dwellings stand on a world tile. Owned by the territory mod — the only
+        /// mod that generates them; today that is Regions and Societies, maintained outside
+        /// RimSynapse.
         /// <para><b>Unregistered value: 0.</b> No territory mod means no known dwellings, which is
         /// the same answer as an empty tile — correct here, because every consumer uses it as a
         /// weighting input rather than as evidence of absence.</para>
@@ -118,15 +120,16 @@ namespace RimSynapse
         }
 
         // ---------------------------------------------------------------------------------------
-        // Residency — owned by RimSynapse - Regions and Territories.
+        // Residency — owned by the territory mod (Regions and Societies, maintained outside
+        // RimSynapse).
         // ---------------------------------------------------------------------------------------
 
         private static Func<Pawn, bool> residency;
 
         /// <summary>
         /// Whether a pawn lives in a generated dwelling rather than merely standing in one. Owned
-        /// by Regions and Territories, which generates the dwellings and their occupants and is the
-        /// only writer of residency anywhere in the org.
+        /// by the territory mod, which generates the dwellings and their occupants and is the only
+        /// writer of residency.
         /// <para><b>Unregistered value: false.</b> With no territory mod nothing generates residents,
         /// so nobody is one. This matches behaviour before the slot existed.</para>
         /// </summary>
@@ -206,9 +209,9 @@ namespace RimSynapse
         // ---------------------------------------------------------------------------------------
 
         /// <summary>
-        /// Reads the pre-registry field on <see cref="SynapseCoreWorldComponent"/> so a copy of
-        /// Regions and Territories built before this registry existed keeps working. Remove with
-        /// that field once the shim's release has passed.
+        /// Reads the pre-registry field on <see cref="SynapseCoreWorldComponent"/> so a
+        /// territory-mod build predating this registry keeps working. Remove with that field once
+        /// the shim's release has passed.
         /// </summary>
         private static Func<int, int> LegacyPopulationDensity
         {
