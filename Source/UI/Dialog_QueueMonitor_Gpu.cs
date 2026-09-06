@@ -5,9 +5,9 @@ using Verse;
 namespace RimSynapse.UI
 {
     /// <summary>
-    /// The Advanced view's GPU/VRAM panel (Core #128). Draws above the queue when
-    /// <c>Settings.qmAdvancedView</c> is on: the GPU name, a measured VRAM usage bar (from
-    /// <see cref="VramMeter"/>), and a component breakdown (from <see cref="VramBreakdown"/>) —
+    /// The Basic view's GPU/VRAM panel (Core #128) — the monitor's default, at-a-glance face; the
+    /// Advanced view swaps to the full LLM-call tables. Draws the GPU name, a measured VRAM usage bar
+    /// (from <see cref="VramMeter"/>), and a component breakdown (from <see cref="VramBreakdown"/>) —
     /// RimWorld, LM Studio, in-process consumers, and the system remainder. When the meter is
     /// unsupported (integrated GPU / non-Windows) it says so and shows the component estimates only.
     /// </summary>

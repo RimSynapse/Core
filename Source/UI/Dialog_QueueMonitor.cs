@@ -46,17 +46,33 @@ namespace RimSynapse.UI
 
         public override void DoWindowContents(Rect inRect)
         {
+            var set = RimSynapseMod.Instance.Settings;
+            bool advanced = set.qmAdvancedView;
+
+            // Header + view toggle (always shown). Basic = GPU/VRAM at a glance; Advanced = all LLM
+            // calls (queue, tables, stats). #128.
+            Text.Font = GameFont.Medium;
+            Widgets.Label(new Rect(0, 0, inRect.width - 180f, 35f), "RimSynapse Monitor");
+            Text.Font = GameFont.Small;
+
+            Rect viewBtn = new Rect(inRect.width - 170f, 6f, 160f, 25f);
+            if (Widgets.ButtonText(viewBtn, advanced ? "View: LLM calls ▾" : "View: VRAM ▸"))
+                set.qmAdvancedView = !set.qmAdvancedView;
+
+            // ── Basic view: GPU / VRAM only ──
+            if (!advanced)
+            {
+                DrawGpuPanel(inRect.width, 40f);
+                return;
+            }
+
+            // ── Advanced view: all LLM calls ──
             HandleColumnDragging();
 
             var queueSnapshot = RequestQueue.GetQueueSnapshot();
             var activeRequest = RequestQueue.ActiveRequest;
             var historySnapshot = RequestQueue.GetHistorySnapshot();
             var sw = RequestQueue.ActiveRequestStopwatch;
-
-            // Header
-            Text.Font = GameFont.Medium;
-            Widgets.Label(new Rect(0, 0, inRect.width, 35f), "LLM Queue Monitor");
-            Text.Font = GameFont.Small;
 
             // Global stats
             Rect statsRect = new Rect(0, 40f, 650f, 20f);
@@ -65,7 +81,6 @@ namespace RimSynapse.UI
 
             // Provider Token Stats
             Rect pStatsRect = new Rect(0, 60f, inRect.width, 20f);
-            var set = RimSynapseMod.Instance.Settings;
             string pStats = $"Tokens:  Local: {set.tokensPromptLocal}p/{set.tokensCompletionLocal}c  |  OpenAI: {set.tokensPromptOpenAi}p/{set.tokensCompletionOpenAi}c  |  Gemini: {set.tokensPromptGemini}p/{set.tokensCompletionGemini}c  |  Claude: {set.tokensPromptClaude}p/{set.tokensCompletionClaude}c";
             Widgets.Label(pStatsRect, pStats);
 
@@ -108,26 +123,15 @@ namespace RimSynapse.UI
                 Find.WindowStack.Add(new FloatMenu(floatMenu));
             }
 
-            // View toggle: Basic (queue only) vs Advanced (adds the GPU/VRAM panel, #128).
-            Rect t4 = new Rect(inRect.width - 170f, 40f, 160f, 25f);
-            if (Widgets.ButtonText(t4, set.qmAdvancedView ? "View: Advanced ▾" : "View: Basic ▸"))
-                set.qmAdvancedView = !set.qmAdvancedView;
-
-            // GPU/VRAM panel (Advanced only) sits between the stats and the queue; everything below
-            // shifts down by its height so the queue layout stays intact in Basic view.
-            float panelTop = 84f;
-            float gpuH = set.qmAdvancedView ? DrawGpuPanel(inRect.width, panelTop) : 0f;
-
-            float dividerY = panelTop + gpuH + 1f;
-            Widgets.DrawLineHorizontal(0, dividerY, inRect.width);
+            Widgets.DrawLineHorizontal(0, 85f, inRect.width);
 
             // Table Header
-            Rect tableHeaderRect = new Rect(0, dividerY + 10f, inRect.width - 16f, 25f);
+            Rect tableHeaderRect = new Rect(0, 95f, inRect.width - 16f, 25f);
             DrawMainHeader(tableHeaderRect);
 
             // Content Area — split between main queue and opportunistic
-            float mainQueueEndY = dividerY + 40f;
-            float mainQueueHeight = (inRect.height - mainQueueEndY) * 0.6f;
+            float mainQueueEndY = 125f;
+            float mainQueueHeight = (inRect.height - 125f) * 0.6f;
             Rect mainOutRect = new Rect(0, mainQueueEndY, inRect.width, mainQueueHeight);
             
             // Calculate main queue view height

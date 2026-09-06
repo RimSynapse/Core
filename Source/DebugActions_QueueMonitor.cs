@@ -5,23 +5,23 @@ using Verse;
 namespace RimSynapse
 {
     /// <summary>
-    /// Debug helpers for the LLM Queue Monitor, grouped under "RimSynapse". Opening it in the
-    /// Advanced view is the headless hook for validating the GPU/VRAM panel (Core #128) — it forces
-    /// the setting on and pops the window so a screenshot or a person can confirm it renders.
+    /// Debug helpers for the monitor, grouped under "RimSynapse". Opening it in the Basic (VRAM) view
+    /// is the headless hook for validating the GPU/VRAM panel (Core #128) — it forces the view to
+    /// Basic and pops the window so a screenshot or a person can confirm the panel renders.
     /// </summary>
     public static class DebugActions_QueueMonitor
     {
-        [DebugAction("RimSynapse", "Queue monitor: open (Advanced view)",
+        [DebugAction("RimSynapse", "Monitor: open VRAM (Basic) view",
             allowedGameStates = AllowedGameStates.Entry | AllowedGameStates.Playing)]
-        private static void OpenAdvanced()
+        private static void OpenVramView()
         {
             var settings = RimSynapseMod.Instance?.Settings;
-            if (settings != null) settings.qmAdvancedView = true;
+            if (settings != null) settings.qmAdvancedView = false;
 
             if (!Find.WindowStack.IsOpen<Dialog_QueueMonitor>())
                 Find.WindowStack.Add(new Dialog_QueueMonitor());
 
-            SynapseLogger.Message("[RimSynapse] Queue monitor opened in Advanced view (#128).");
+            SynapseLogger.Message("[RimSynapse] Monitor opened in Basic (VRAM) view (#128).");
         }
     }
 }

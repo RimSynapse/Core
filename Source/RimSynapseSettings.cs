@@ -170,7 +170,8 @@ namespace RimSynapse
         public bool qmShowProvider = true;
         public bool qmShowModel = true;
 
-        /// <summary>Queue monitor Advanced view: adds the GPU/VRAM panel above the queue (Core #128).</summary>
+        /// <summary>Queue monitor view (Core #128). false = Basic (GPU/VRAM at a glance, the default);
+        /// true = Advanced (the full LLM-call queue and tables).</summary>
         public bool qmAdvancedView = false;
 
         // --- Capability tier and cost governance ---
