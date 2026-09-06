@@ -148,15 +148,19 @@ namespace RimSynapse.UI
                 Find.WindowStack.Add(new FloatMenu(floatMenu));
             }
 
-            Widgets.DrawLineHorizontal(0, 85f, inRect.width);
+            // Compact GPU/VRAM summary so the Advanced view keeps GPU load in sight (#128).
+            DrawGpuSummary(0f, 82f, inRect.width);
+
+            float headerTop = 108f;
+            Widgets.DrawLineHorizontal(0, headerTop, inRect.width);
 
             // Table Header
-            Rect tableHeaderRect = new Rect(0, 95f, inRect.width - 16f, 25f);
+            Rect tableHeaderRect = new Rect(0, headerTop + 10f, inRect.width - 16f, 25f);
             DrawMainHeader(tableHeaderRect);
 
             // Content Area — split between main queue and opportunistic
-            float mainQueueEndY = 125f;
-            float mainQueueHeight = (inRect.height - 125f) * 0.6f;
+            float mainQueueEndY = headerTop + 40f;
+            float mainQueueHeight = (inRect.height - mainQueueEndY) * 0.6f;
             Rect mainOutRect = new Rect(0, mainQueueEndY, inRect.width, mainQueueHeight);
             
             // Calculate main queue view height

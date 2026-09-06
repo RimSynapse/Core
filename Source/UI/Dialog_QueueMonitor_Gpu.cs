@@ -95,6 +95,60 @@ namespace RimSynapse.UI
             return (y + 2f) - top;
         }
 
+        /// <summary>A one-line GPU/VRAM summary for the Advanced view's header: a compact VRAM bar plus
+        /// a component readout, so switching to the LLM-call view doesn't lose sight of GPU load.</summary>
+        private void DrawGpuSummary(float x, float y, float width)
+        {
+            VramBreakdown.Refresh();
+
+            float totalMb = VramMeter.TotalMb > 0f ? VramMeter.TotalMb : SystemInfo.graphicsMemorySize;
+            float barW = 320f;
+
+            if (VramMeter.Supported && totalMb > 0f)
+            {
+                float used = VramMeter.UsedMb;
+                float pct = Mathf.Clamp01(used / totalMb);
+                DrawBar(new Rect(x, y, barW, 20f), pct, VramColor(pct),
+                    $"VRAM {used / 1024f:F1} / {totalMb / 1024f:F1} GB", $"{pct:P0}");
+            }
+            else
+            {
+                Widgets.DrawBoxSolid(new Rect(x, y, barW, 20f), GpuBarBg);
+                var pa = Text.Anchor; var pf = Text.Font;
+                Text.Font = GameFont.Tiny; Text.Anchor = TextAnchor.MiddleLeft;
+                GUI.color = new Color(0.85f, 0.75f, 0.4f);
+                Widgets.Label(new Rect(x + 6f, y, barW - 12f, 20f),
+                    totalMb > 0f ? $"VRAM measured n/a · {totalMb / 1024f:F1} GB total (est)" : "VRAM n/a");
+                GUI.color = Color.white; Text.Anchor = pa; Text.Font = pf;
+            }
+
+            // Component readout to the right of the bar.
+            var parts = new List<string>
+            {
+                $"RW {VramBreakdown.RimWorldMb / 1024f:F1}",
+                VramBreakdown.LmStudioRemote ? "LMS remote" : $"LMS {VramBreakdown.LmStudioMb / 1024f:F1}",
+            };
+            foreach (var c in VramBreakdown.Consumers)
+                parts.Add($"{ShortLabel(c.label)} {c.vramMb / 1024f:F1}");
+            if (VramBreakdown.Measured)
+                parts.Add($"Sys {VramBreakdown.SystemMb / 1024f:F1}");
+
+            string gpu = SystemInfo.graphicsDeviceName ?? "GPU";
+            string right = $"{gpu}    {string.Join("  ·  ", parts)}  GB";
+
+            var pa2 = Text.Anchor; var pf2 = Text.Font;
+            Text.Font = GameFont.Tiny; Text.Anchor = TextAnchor.MiddleLeft;
+            GUI.color = new Color(0.72f, 0.72f, 0.72f);
+            Widgets.Label(new Rect(x + barW + 12f, y, width - barW - 24f, 20f), right);
+            GUI.color = Color.white; Text.Anchor = pa2; Text.Font = pf2;
+        }
+
+        private static string ShortLabel(string label)
+        {
+            if (string.IsNullOrEmpty(label)) return "model";
+            return label.Length <= 14 ? label : label.Substring(0, 13) + "…";
+        }
+
         /// <summary>A labelled bar: background, colored fill, and a left label with optional right value.</summary>
         private static void DrawBar(Rect rect, float fill, Color fillColor, string leftLabel, string rightValue = null)
         {

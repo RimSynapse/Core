@@ -23,5 +23,18 @@ namespace RimSynapse
 
             SynapseLogger.Message("[RimSynapse] Monitor opened in Basic (VRAM) view (#128).");
         }
+
+        [DebugAction("RimSynapse", "Monitor: open LLM calls (Advanced) view",
+            allowedGameStates = AllowedGameStates.Entry | AllowedGameStates.Playing)]
+        private static void OpenLlmView()
+        {
+            var settings = RimSynapseMod.Instance?.Settings;
+            if (settings != null) settings.qmAdvancedView = true;
+
+            if (!Find.WindowStack.IsOpen<Dialog_QueueMonitor>())
+                Find.WindowStack.Add(new Dialog_QueueMonitor());
+
+            SynapseLogger.Message("[RimSynapse] Monitor opened in Advanced (LLM calls) view (#128).");
+        }
     }
 }
