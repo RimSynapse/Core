@@ -1,152 +1,114 @@
-using System.Collections.Generic;
 using UnityEngine;
 using Verse;
 
 namespace RimSynapse.UI
 {
     /// <summary>
-    /// The Basic view's GPU/VRAM panel (Core #128) — the monitor's default, at-a-glance face; the
-    /// Advanced view swaps to the full LLM-call tables. Draws the GPU name, a measured VRAM usage bar
-    /// (from <see cref="VramMeter"/>), and a component breakdown (from <see cref="VramBreakdown"/>) —
-    /// RimWorld, LM Studio, in-process consumers, and the system remainder. When the meter is
-    /// unsupported (integrated GPU / non-Windows) it says so and shows the component estimates only.
+    /// The GPU/VRAM column (Core #128) — the monitor's always-present left column. Shows the GPU name,
+    /// a measured VRAM usage bar (from <see cref="VramMeter"/>), and a textual component breakdown
+    /// (from <see cref="VramBreakdown"/>): RimWorld, LM Studio, in-process consumers, system, free.
+    /// In Basic view it is the whole window; in Advanced the LLM-call view is drawn to its right.
+    /// When the meter is unsupported (integrated GPU / non-Windows) it says so and shows the component
+    /// estimates only.
     /// </summary>
     public partial class Dialog_QueueMonitor
     {
+        internal const float VramColWidth = 360f;
+
         private static readonly Color GpuBarBg = new Color(0.16f, 0.16f, 0.19f, 0.9f);
         private static readonly Color VramGreen = new Color(0.40f, 0.80f, 0.45f);
         private static readonly Color VramYellow = new Color(0.90f, 0.80f, 0.30f);
         private static readonly Color VramOrange = new Color(0.95f, 0.60f, 0.25f);
         private static readonly Color VramRed = new Color(0.90f, 0.35f, 0.35f);
+        private static readonly Color RowDim = new Color(0.72f, 0.72f, 0.72f);
 
-        private static readonly Color CompRimWorld = new Color(0.45f, 0.65f, 0.95f);
-        private static readonly Color CompLmStudio = new Color(0.65f, 0.55f, 0.90f);
-        private static readonly Color CompConsumer = new Color(0.40f, 0.80f, 0.75f);
-        private static readonly Color CompSystem = new Color(0.55f, 0.55f, 0.60f);
-
-        /// <summary>Draw the GPU/VRAM panel starting at <paramref name="top"/>; returns its height.</summary>
-        private float DrawGpuPanel(float width, float top)
+        /// <summary>Number of textual breakdown rows the column will draw — used to size the Basic window.</summary>
+        internal static int VramRowCount()
         {
             VramBreakdown.Refresh();
-
-            float x = 4f;
-            float w = width - 8f;
-            float y = top + 4f;
-
-            // ── Title + GPU name ──
-            Text.Font = GameFont.Medium;
-            Widgets.Label(new Rect(x, y, 220f, 28f), "GPU / VRAM");
-            Text.Font = GameFont.Small;
-
-            string gpuName = SystemInfo.graphicsDeviceName ?? "Unknown GPU";
-            string gpuVendor = SystemInfo.graphicsDeviceVendor;
-            string gpuLine = string.IsNullOrEmpty(gpuVendor) ? gpuName : $"{gpuName}  ·  {gpuVendor}";
-            var prevAnchor = Text.Anchor;
-            Text.Anchor = TextAnchor.MiddleRight;
-            GUI.color = new Color(0.7f, 0.7f, 0.7f);
-            Widgets.Label(new Rect(x + 224f, y, w - 228f, 28f), gpuLine);
-            GUI.color = Color.white;
-            Text.Anchor = prevAnchor;
-            y += 30f;
-
-            float totalMb = VramMeter.TotalMb > 0f ? VramMeter.TotalMb : SystemInfo.graphicsMemorySize;
-
-            // ── Measured VRAM usage bar ──
-            if (VramMeter.Supported && totalMb > 0f)
-            {
-                float usedMb = VramMeter.UsedMb;
-                float pct = totalMb > 0f ? Mathf.Clamp01(usedMb / totalMb) : 0f;
-                DrawBar(new Rect(x, y, w, 22f), pct, VramColor(pct),
-                    $"VRAM  {usedMb / 1024f:F1} / {totalMb / 1024f:F1} GB  ({pct:P0})");
-                y += 26f;
-            }
-            else
-            {
-                GUI.color = new Color(0.85f, 0.75f, 0.4f);
-                Widgets.Label(new Rect(x, y, w, 22f),
-                    totalMb > 0f
-                        ? $"Measured VRAM unavailable (integrated GPU or non-Windows) — {totalMb / 1024f:F1} GB total, estimates only"
-                        : "GPU VRAM not detected.");
-                GUI.color = Color.white;
-                y += 24f;
-            }
-
-            // ── Component breakdown ──
-            var rows = new List<(string label, float mb, Color color)>
-            {
-                ("RimWorld", VramBreakdown.RimWorldMb, CompRimWorld),
-                (VramBreakdown.LmStudioRemote ? "LM Studio (remote host)" : "LM Studio model",
-                    VramBreakdown.LmStudioMb, CompLmStudio),
-            };
-            foreach (var c in VramBreakdown.Consumers)
-                rows.Add((c.label ?? "in-process model", c.vramMb, CompConsumer));
-            if (VramBreakdown.Measured)
-                rows.Add(("System / desktop", VramBreakdown.SystemMb, CompSystem));
-
-            float denom = totalMb > 0f ? totalMb : 1f;
-            foreach (var row in rows)
-            {
-                float frac = Mathf.Clamp01(row.mb / denom);
-                string val = row.mb > 0.5f ? $"{row.mb / 1024f:F1} GB" : "—";
-                DrawBar(new Rect(x, y, w, 18f), frac, row.color, $"{row.label}", val);
-                y += 20f;
-            }
-
-            return (y + 2f) - top;
+            return 2 + VramBreakdown.Consumers.Count + (VramBreakdown.Measured ? 2 : 1);
         }
 
-        /// <summary>A one-line GPU/VRAM summary for the Advanced view's header: a compact VRAM bar plus
-        /// a component readout, so switching to the LLM-call view doesn't lose sight of GPU load.</summary>
-        private void DrawGpuSummary(float x, float y, float width)
+        private void DrawVramColumn(Rect area)
         {
             VramBreakdown.Refresh();
 
+            float x = area.x + 6f;
+            float w = area.width - 12f;
+            float y = area.y + 6f;
+
+            Text.Font = GameFont.Medium;
+            Widgets.Label(new Rect(x, y, w, 28f), "GPU / VRAM");
+            Text.Font = GameFont.Small;
+            y += 30f;
+
+            GUI.color = RowDim;
+            Widgets.Label(new Rect(x, y, w, 20f), SystemInfo.graphicsDeviceName ?? "Unknown GPU");
+            GUI.color = Color.white;
+            y += 22f;
+
             float totalMb = VramMeter.TotalMb > 0f ? VramMeter.TotalMb : SystemInfo.graphicsMemorySize;
-            float barW = 320f;
 
             if (VramMeter.Supported && totalMb > 0f)
             {
                 float used = VramMeter.UsedMb;
                 float pct = Mathf.Clamp01(used / totalMb);
-                DrawBar(new Rect(x, y, barW, 20f), pct, VramColor(pct),
+                DrawBar(new Rect(x, y, w, 22f), pct, VramColor(pct),
                     $"VRAM {used / 1024f:F1} / {totalMb / 1024f:F1} GB", $"{pct:P0}");
+                y += 28f;
             }
             else
             {
-                Widgets.DrawBoxSolid(new Rect(x, y, barW, 20f), GpuBarBg);
-                var pa = Text.Anchor; var pf = Text.Font;
-                Text.Font = GameFont.Tiny; Text.Anchor = TextAnchor.MiddleLeft;
                 GUI.color = new Color(0.85f, 0.75f, 0.4f);
-                Widgets.Label(new Rect(x + 6f, y, barW - 12f, 20f),
-                    totalMb > 0f ? $"VRAM measured n/a · {totalMb / 1024f:F1} GB total (est)" : "VRAM n/a");
-                GUI.color = Color.white; Text.Anchor = pa; Text.Font = pf;
+                Widgets.Label(new Rect(x, y, w, 20f),
+                    totalMb > 0f ? $"VRAM {totalMb / 1024f:F1} GB total · measured n/a (iGPU)"
+                                 : "VRAM not detected");
+                GUI.color = Color.white;
+                y += 24f;
             }
 
-            // Component readout to the right of the bar.
-            var parts = new List<string>
-            {
-                $"RW {VramBreakdown.RimWorldMb / 1024f:F1}",
-                VramBreakdown.LmStudioRemote ? "LMS remote" : $"LMS {VramBreakdown.LmStudioMb / 1024f:F1}",
-            };
+            y += 2f;
+            DrawTextRow(x, ref y, w, "RimWorld", GbStr(VramBreakdown.RimWorldMb));
+            DrawTextRow(x, ref y, w,
+                VramBreakdown.LmStudioRemote ? "LM Studio (remote)" : "LM Studio model",
+                VramBreakdown.LmStudioRemote ? "—" : GbStr(VramBreakdown.LmStudioMb));
             foreach (var c in VramBreakdown.Consumers)
-                parts.Add($"{ShortLabel(c.label)} {c.vramMb / 1024f:F1}");
+                DrawTextRow(x, ref y, w, c.label ?? "in-process model", GbStr(c.vramMb));
+
             if (VramBreakdown.Measured)
-                parts.Add($"Sys {VramBreakdown.SystemMb / 1024f:F1}");
-
-            string gpu = SystemInfo.graphicsDeviceName ?? "GPU";
-            string right = $"{gpu}    {string.Join("  ·  ", parts)}  GB";
-
-            var pa2 = Text.Anchor; var pf2 = Text.Font;
-            Text.Font = GameFont.Tiny; Text.Anchor = TextAnchor.MiddleLeft;
-            GUI.color = new Color(0.72f, 0.72f, 0.72f);
-            Widgets.Label(new Rect(x + barW + 12f, y, width - barW - 24f, 20f), right);
-            GUI.color = Color.white; Text.Anchor = pa2; Text.Font = pf2;
+            {
+                DrawTextRow(x, ref y, w, "System / desktop", GbStr(VramBreakdown.SystemMb));
+                y += 2f;
+                float freeMb = VramMeter.FreeMb;
+                float freePctUsed = totalMb > 0f ? 1f - Mathf.Clamp01(freeMb / totalMb) : 0f;
+                DrawTextRow(x, ref y, w, "Free", GbStr(freeMb), VramColor(freePctUsed));
+            }
+            else
+            {
+                GUI.color = RowDim;
+                Text.Font = GameFont.Tiny;
+                Widgets.Label(new Rect(x, y, w, 18f), "(estimates — no measured GPU counter)");
+                Text.Font = GameFont.Small;
+                GUI.color = Color.white;
+                y += 18f;
+            }
         }
 
-        private static string ShortLabel(string label)
+        private static string GbStr(float mb) => mb > 0.5f ? $"{mb / 1024f:F1} GB" : "—";
+
+        private static void DrawTextRow(float x, ref float y, float w, string label, string value, Color? valueColor = null)
         {
-            if (string.IsNullOrEmpty(label)) return "model";
-            return label.Length <= 14 ? label : label.Substring(0, 13) + "…";
+            var prevAnchor = Text.Anchor;
+            Text.Anchor = TextAnchor.MiddleLeft;
+            Widgets.Label(new Rect(x, y, w * 0.55f, 20f), label);
+
+            Text.Anchor = TextAnchor.MiddleRight;
+            if (valueColor.HasValue) GUI.color = valueColor.Value;
+            Widgets.Label(new Rect(x + w * 0.35f, y, w * 0.65f, 20f), value);
+            GUI.color = Color.white;
+
+            Text.Anchor = prevAnchor;
+            y += 20f;
         }
 
         /// <summary>A labelled bar: background, colored fill, and a left label with optional right value.</summary>

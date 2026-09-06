@@ -36,15 +36,14 @@ namespace RimSynapse.UI
         public override Vector2 InitialSize =>
             (RimSynapseMod.Instance?.Settings?.qmAdvancedView ?? false) ? AdvancedSize : BasicSize();
 
-        /// <summary>Compact window size for the Basic (VRAM) view — just tall enough for the panel's
-        /// rows, so the view doesn't sit in a half-empty 1200×750 frame.</summary>
+        /// <summary>Compact window size for the Basic (VRAM-only) view — just the left column, tall
+        /// enough for its rows, so it doesn't sit in a half-empty 1200×750 frame.</summary>
         private static Vector2 BasicSize()
         {
-            VramBreakdown.Refresh();
-            int rows = 2 + VramBreakdown.Consumers.Count + (VramBreakdown.Measured ? 1 : 0);
-            // top strip + GPU line + VRAM bar + breakdown rows + padding + window chrome
-            float h = 30f + 30f + 26f + rows * 20f + 12f + 46f;
-            return new Vector2(560f, h);
+            int rows = VramRowCount();
+            // title + GPU name + VRAM bar + breakdown rows + padding + window chrome
+            float h = 6f + 30f + 22f + 28f + 2f + rows * 20f + 10f + 46f;
+            return new Vector2(VramColWidth + 40f, h);
         }
 
         /// <summary>Resize the open window to fit the mode being switched to.</summary>
@@ -72,26 +71,34 @@ namespace RimSynapse.UI
             var set = RimSynapseMod.Instance.Settings;
             bool advanced = set.qmAdvancedView;
 
-            // View toggle (always). Basic = GPU/VRAM at a glance; Advanced = all LLM calls. #128.
+            // View toggle (top-right). The VRAM column is always shown; Advanced grows the window to
+            // the right and adds the LLM-call view beside it. #128.
             Rect viewBtn = new Rect(inRect.width - 170f, 4f, 160f, 24f);
-            if (Widgets.ButtonText(viewBtn, advanced ? "View: LLM calls ▾" : "View: VRAM ▸"))
+            if (Widgets.ButtonText(viewBtn, advanced ? "Hide LLM calls ◂" : "Show LLM calls ▸"))
             {
                 set.qmAdvancedView = !set.qmAdvancedView;
                 ResizeForMode(set.qmAdvancedView);
             }
 
-            // ── Basic view: GPU / VRAM only (compact) ──
-            if (!advanced)
-            {
-                DrawGpuPanel(inRect.width, 30f);
-                return;
-            }
+            // Left column: GPU / VRAM textual breakdown (always present).
+            DrawVramColumn(new Rect(0f, 0f, VramColWidth, inRect.height));
 
-            // ── Advanced view: all LLM calls ──
-            Text.Font = GameFont.Medium;
-            Widgets.Label(new Rect(0, 0, inRect.width - 180f, 35f), "RimSynapse Monitor");
-            Text.Font = GameFont.Small;
+            if (!advanced) return;
 
+            // Right side: the LLM-call view, in a group offset past the column so its own coordinates
+            // stay 0-based.
+            Widgets.DrawLineVertical(VramColWidth + 5f, 4f, inRect.height - 8f);
+            float callsX = VramColWidth + 12f;
+            Rect callsRect = new Rect(callsX, 0f, inRect.width - callsX, inRect.height);
+            GUI.BeginGroup(callsRect);
+            DrawLlmCalls(set, callsRect.width, callsRect.height);
+            GUI.EndGroup();
+        }
+
+        /// <summary>Draw the LLM-call view (queue, request table, opportunistic tasks) within a
+        /// <paramref name="width"/> × <paramref name="height"/> area whose origin is (0,0).</summary>
+        private void DrawLlmCalls(RimSynapseSettings set, float width, float height)
+        {
             HandleColumnDragging();
 
             var queueSnapshot = RequestQueue.GetQueueSnapshot();
@@ -99,18 +106,13 @@ namespace RimSynapse.UI
             var historySnapshot = RequestQueue.GetHistorySnapshot();
             var sw = RequestQueue.ActiveRequestStopwatch;
 
-            // Global stats
-            Rect statsRect = new Rect(0, 40f, 650f, 20f);
-            string stats = $"Depth: {RequestQueue.QueueDepth}  |  Throttle: {RequestQueue.ThrottleLevel:P0}  |  Avg: {RequestQueue.AverageResponseMs:F0}ms  |  TOPS: {RequestQueue.GlobalTops:F1}";
-            Widgets.Label(statsRect, stats);
-
-            // Provider Token Stats
-            Rect pStatsRect = new Rect(0, 60f, inRect.width, 20f);
-            string pStats = $"Tokens:  Local: {set.tokensPromptLocal}p/{set.tokensCompletionLocal}c  |  OpenAI: {set.tokensPromptOpenAi}p/{set.tokensCompletionOpenAi}c  |  Gemini: {set.tokensPromptGemini}p/{set.tokensCompletionGemini}c  |  Claude: {set.tokensPromptClaude}p/{set.tokensCompletionClaude}c";
-            Widgets.Label(pStatsRect, pStats);
+            // Header row: title + column/TTL controls (left-aligned, clear of the window's toggle).
+            Text.Font = GameFont.Medium;
+            Widgets.Label(new Rect(0, 2f, 130f, 30f), "LLM Calls");
+            Text.Font = GameFont.Small;
 
             // Columns Menu
-            Rect t1 = new Rect(550f, 40f, 150f, 25f);
+            Rect t1 = new Rect(140f, 6f, 150f, 24f);
             if (Widgets.ButtonText(t1, "Columns..."))
             {
                 var s = RimSynapseMod.Instance.Settings;
@@ -135,7 +137,7 @@ namespace RimSynapse.UI
             }
 
             // TTL Toggle
-            Rect t3 = new Rect(870f, 40f, 200f, 25f);
+            Rect t3 = new Rect(300f, 6f, 190f, 24f);
             if (Widgets.ButtonText(t3, $"History TTL: {RequestQueue.HistoryRetentionSeconds}s"))
             {
                 var floatMenu = new List<FloatMenuOption>
@@ -148,20 +150,24 @@ namespace RimSynapse.UI
                 Find.WindowStack.Add(new FloatMenu(floatMenu));
             }
 
-            // Compact GPU/VRAM summary so the Advanced view keeps GPU load in sight (#128).
-            DrawGpuSummary(0f, 82f, inRect.width);
+            // Global stats
+            Widgets.Label(new Rect(0, 40f, width, 20f),
+                $"Depth: {RequestQueue.QueueDepth}  |  Throttle: {RequestQueue.ThrottleLevel:P0}  |  Avg: {RequestQueue.AverageResponseMs:F0}ms  |  TOPS: {RequestQueue.GlobalTops:F1}");
 
-            float headerTop = 108f;
-            Widgets.DrawLineHorizontal(0, headerTop, inRect.width);
+            // Provider Token Stats
+            Widgets.Label(new Rect(0, 62f, width, 20f),
+                $"Tokens:  Local: {set.tokensPromptLocal}p/{set.tokensCompletionLocal}c  |  OpenAI: {set.tokensPromptOpenAi}p/{set.tokensCompletionOpenAi}c  |  Gemini: {set.tokensPromptGemini}p/{set.tokensCompletionGemini}c  |  Claude: {set.tokensPromptClaude}p/{set.tokensCompletionClaude}c");
+
+            Widgets.DrawLineHorizontal(0, 86f, width);
 
             // Table Header
-            Rect tableHeaderRect = new Rect(0, headerTop + 10f, inRect.width - 16f, 25f);
+            Rect tableHeaderRect = new Rect(0, 96f, width - 16f, 25f);
             DrawMainHeader(tableHeaderRect);
 
             // Content Area — split between main queue and opportunistic
-            float mainQueueEndY = headerTop + 40f;
-            float mainQueueHeight = (inRect.height - mainQueueEndY) * 0.6f;
-            Rect mainOutRect = new Rect(0, mainQueueEndY, inRect.width, mainQueueHeight);
+            float mainQueueEndY = 126f;
+            float mainQueueHeight = (height - mainQueueEndY) * 0.6f;
+            Rect mainOutRect = new Rect(0, mainQueueEndY, width, mainQueueHeight);
             
             // Calculate main queue view height
             float mainViewHeight = 0f;
@@ -227,20 +233,20 @@ namespace RimSynapse.UI
 
             // ── Opportunistic Tasks Section ────────────────────────────
             float oppY = mainOutRect.yMax + 10f;
-            float oppHeight = inRect.height - oppY;
+            float oppHeight = height - oppY;
 
             if (oppHeight < 60f) return;
 
-            Widgets.DrawLineHorizontal(0, oppY, inRect.width);
+            Widgets.DrawLineHorizontal(0, oppY, width);
             oppY += 5f;
 
             string throttleModeLabel = GetThrottleModeLabel();
             Text.Font = GameFont.Medium;
-            Widgets.Label(new Rect(0, oppY, inRect.width, 30f), $"Opportunistic Tasks  [{throttleModeLabel}]");
+            Widgets.Label(new Rect(0, oppY, width, 30f), $"Opportunistic Tasks  [{throttleModeLabel}]");
             Text.Font = GameFont.Small;
             oppY += 35f;
 
-            Rect oppTableHeader = new Rect(0, oppY, inRect.width - 16f, 25f);
+            Rect oppTableHeader = new Rect(0, oppY, width - 16f, 25f);
             DrawOpportunisticHeader(oppTableHeader);
             oppY += 25f;
 
@@ -262,8 +268,8 @@ namespace RimSynapse.UI
 
             foreach (var task in sortedOpp)
             {
-                if (oppY + 25f > inRect.height) break;
-                Rect taskRow = new Rect(0, oppY, inRect.width - 16f, 25f);
+                if (oppY + 25f > height) break;
+                Rect taskRow = new Rect(0, oppY, width - 16f, 25f);
 
                 bool onCooldown = currentTick - task.LastRunTick < task.CooldownTicks;
                 if (!task.Enabled) GUI.color = Color.gray;
@@ -284,7 +290,7 @@ namespace RimSynapse.UI
 
             if (tasks.Count == 0)
             {
-                Widgets.Label(new Rect(10f, oppY, inRect.width, 25f), "No opportunistic tasks registered.");
+                Widgets.Label(new Rect(10f, oppY, width, 25f), "No opportunistic tasks registered.");
             }
         }
 
