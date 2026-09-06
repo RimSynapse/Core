@@ -44,9 +44,9 @@ namespace RimSynapse.UI
             y += 30f;
 
             GUI.color = RowDim;
-            Widgets.Label(new Rect(x, y, w, 20f), SystemInfo.graphicsDeviceName ?? "Unknown GPU");
+            Widgets.Label(new Rect(x, y, w, RowH), SystemInfo.graphicsDeviceName ?? "Unknown GPU");
             GUI.color = Color.white;
-            y += 22f;
+            y += RowH;
 
             float totalMb = VramMeter.TotalMb > 0f ? VramMeter.TotalMb : SystemInfo.graphicsMemorySize;
 
@@ -61,14 +61,14 @@ namespace RimSynapse.UI
             else
             {
                 GUI.color = new Color(0.85f, 0.75f, 0.4f);
-                Widgets.Label(new Rect(x, y, w, 20f),
+                Widgets.Label(new Rect(x, y, w, RowH),
                     totalMb > 0f ? $"VRAM {totalMb / 1024f:F1} GB total · measured n/a (iGPU)"
                                  : "VRAM not detected");
                 GUI.color = Color.white;
-                y += 24f;
+                y += RowH;
             }
 
-            y += 2f;
+            y += 4f;
             DrawTextRow(x, ref y, w, "RimWorld", GbStr(VramBreakdown.RimWorldMb));
             DrawTextRow(x, ref y, w,
                 VramBreakdown.LmStudioRemote ? "LM Studio (remote)" : "LM Studio model",
@@ -121,17 +121,13 @@ namespace RimSynapse.UI
             DrawTextRow(x, ref y, w, "  Tokens", $"{sav.promptTokens:N0}p / {sav.completionTokens:N0}c");
 
             // TOPS by model (session — current performance). Top few by throughput.
-            y += 4f;
-            GUI.color = RowDim;
-            Widgets.Label(new Rect(x, y, w, 18f), "TOPS by model (session)");
-            GUI.color = Color.white;
-            y += 20f;
+            DrawSubHeader(x, ref y, w, "TOPS by model (session)");
             if (ses.perModel.Count == 0)
             {
                 GUI.color = RowDim;
-                Widgets.Label(new Rect(x + 8f, y, w - 8f, 18f), "(no calls yet)");
+                Widgets.Label(new Rect(x + 8f, y, w - 8f, RowH), "(no calls yet)");
                 GUI.color = Color.white;
-                y += 18f;
+                y += RowH;
             }
             else
             {
@@ -147,11 +143,7 @@ namespace RimSynapse.UI
 
             // Context: what LM Studio reports as the window vs the largest we've proven in use
             // (per-save peak prompt+completion) — the headroom the scaling mechanisms are working with.
-            y += 4f;
-            GUI.color = RowDim;
-            Widgets.Label(new Rect(x, y, w, 18f), "Context");
-            GUI.color = Color.white;
-            y += 20f;
+            DrawSubHeader(x, ref y, w, "Context");
 
             int? reported = RimSynapse.Internal.ModelManager.ContextLength;
             if (!reported.HasValue || reported.Value <= 0)
@@ -179,19 +171,34 @@ namespace RimSynapse.UI
 
         private static string GbStr(float mb) => mb > 0.5f ? $"{mb / 1024f:F1} GB" : "—";
 
+        private const float RowH = 24f;
+
         private static void DrawTextRow(float x, ref float y, float w, string label, string value, Color? valueColor = null)
         {
             var prevAnchor = Text.Anchor;
             Text.Anchor = TextAnchor.MiddleLeft;
-            Widgets.Label(new Rect(x, y, w * 0.55f, 20f), label);
+            Widgets.Label(new Rect(x, y, w * 0.5f, RowH), label);
 
             Text.Anchor = TextAnchor.MiddleRight;
             if (valueColor.HasValue) GUI.color = valueColor.Value;
-            Widgets.Label(new Rect(x + w * 0.35f, y, w * 0.65f, 20f), value);
+            Widgets.Label(new Rect(x + w * 0.4f, y, w * 0.6f, RowH), value);
             GUI.color = Color.white;
 
             Text.Anchor = prevAnchor;
-            y += 20f;
+            y += RowH;
+        }
+
+        /// <summary>A dim sub-section label with breathing room above it and full line height below.</summary>
+        private static void DrawSubHeader(float x, ref float y, float w, string text)
+        {
+            y += 8f;
+            var prevAnchor = Text.Anchor;
+            Text.Anchor = TextAnchor.MiddleLeft;
+            GUI.color = RowDim;
+            Widgets.Label(new Rect(x, y, w, RowH), text);
+            GUI.color = Color.white;
+            Text.Anchor = prevAnchor;
+            y += RowH;
         }
 
         /// <summary>A labelled bar: background, colored fill, and a left label with optional right value.</summary>

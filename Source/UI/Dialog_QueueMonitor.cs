@@ -42,7 +42,7 @@ namespace RimSynapse.UI
         {
             int rows = VramRowCount();
             // title + GPU name + VRAM bar + breakdown rows + padding + window chrome
-            float h = 6f + 30f + 22f + 28f + 2f + rows * 20f + 10f + 46f;
+            float h = 6f + 30f + 24f + 28f + 4f + rows * 24f + 10f + 46f;
             return new Vector2(VramColWidth + 40f, h);
         }
 
