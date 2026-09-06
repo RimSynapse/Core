@@ -36,5 +36,27 @@ namespace RimSynapse
 
             SynapseLogger.Message("[RimSynapse] Monitor opened in Advanced (LLM calls) view (#128).");
         }
+
+        [DebugAction("RimSynapse", "LLM metrics: record sample call + dump",
+            allowedGameStates = AllowedGameStates.Entry | AllowedGameStates.Playing)]
+        private static void RecordSampleMetric()
+        {
+            var r = ChatResult.Success("hello world", "google/gemma-4-e2b",
+                promptTokens: 4096, completionTokens: 256, durationMs: 2000);
+            SynapseCallMetrics.Record(ApiProvider.Local_LMStudio, "http://localhost:1234/v1", r);
+
+            var ses = SynapseCallMetrics.Session;
+            var sav = SynapseCallMetrics.Save;
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("[RimSynapse] LLM call metrics (Core #127) after sample record:");
+            sb.AppendLine($"  session: {ses.calls} calls, {ses.Tops:F1} tok/s, " +
+                          $"{ses.promptTokens}p/{ses.completionTokens}c");
+            sb.AppendLine($"  save:    {sav.calls} calls, {sav.promptTokens}p/{sav.completionTokens}c");
+            foreach (var m in ses.perModel)
+                sb.AppendLine($"    model {m.Key}: {m.Value.Tops:F1} tok/s");
+            foreach (var e in sav.maxPromptByEndpoint)
+                sb.AppendLine($"    max call {e.Key}: {e.Value} tok");
+            SynapseLogger.Message(sb.ToString().TrimEnd());
+        }
     }
 }

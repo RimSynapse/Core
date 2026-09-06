@@ -55,6 +55,9 @@ namespace RimSynapse
                 SynapseScriptRunner.ClearForLoad();
                 SynapseScriptRunner.RestoreFromSave(persistedScripts);
             }
+
+            // Per-save LLM call metrics (#127).
+            SynapseCallMetrics.ExposeSave();
         }
 
         /// <summary>
@@ -203,6 +206,7 @@ namespace RimSynapse
         {
             base.StartedNewGame();
             ClearAllQueues();
+            SynapseCallMetrics.ResetForNewGame();
             SynapseLogger.Message("Started new game. Queues cleared.");
         }
 
@@ -210,6 +214,7 @@ namespace RimSynapse
         {
             base.LoadedGame();
             ClearAllQueues();
+            SynapseCallMetrics.ResetSession();
             SynapseLogger.Message("Loaded game. Queues cleared.");
         }
 

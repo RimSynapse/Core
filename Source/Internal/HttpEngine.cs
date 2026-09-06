@@ -218,7 +218,10 @@ namespace RimSynapse.Internal
                         else if (providerHit == ApiProvider.Anthropic_Claude) { settings.tokensPromptClaude += chatResult.promptTokens; settings.tokensCompletionClaude += chatResult.completionTokens; }
                         else if (providerHit == ApiProvider.Custom) { settings.tokensPromptCustom += chatResult.promptTokens; settings.tokensCompletionCustom += chatResult.completionTokens; }
                     }
-                    
+
+                    // Scoped session/save metrics — TOPS, per-model throughput, max call size (#127).
+                    SynapseCallMetrics.Record(providerHit, baseUrl, chatResult);
+
                     return chatResult;
                 }
                 else if (payload is LlmVisionRequest visionReq)

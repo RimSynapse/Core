@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Verse;
 
@@ -29,7 +30,7 @@ namespace RimSynapse.UI
             return 2 + VramBreakdown.Consumers.Count + (VramBreakdown.Measured ? 2 : 1);
         }
 
-        private void DrawVramColumn(Rect area)
+        private void DrawVramColumn(Rect area, bool showMetrics)
         {
             VramBreakdown.Refresh();
 
@@ -92,6 +93,84 @@ namespace RimSynapse.UI
                 GUI.color = Color.white;
                 y += 18f;
             }
+
+            if (showMetrics) DrawLlmMetrics(area.x + 6f, ref y, area.width - 12f);
+        }
+
+        /// <summary>The LLM-call history section, shown in the column when the view is expanded (#127):
+        /// session and per-save token/call/TOPS totals, per-model throughput, and max call size.</summary>
+        private void DrawLlmMetrics(float x, ref float y, float w)
+        {
+            var ses = SynapseCallMetrics.Session;
+            var sav = SynapseCallMetrics.Save;
+
+            y += 8f;
+            Widgets.DrawLineHorizontal(x, y, w);
+            y += 8f;
+
+            Text.Font = GameFont.Medium;
+            Widgets.Label(new Rect(x, y, w, 26f), "LLM Metrics");
+            Text.Font = GameFont.Small;
+            y += 28f;
+
+            DrawTextRow(x, ref y, w, "Session", $"{ses.calls} calls" + (ses.failures > 0 ? $" ({ses.failures} failed)" : ""));
+            DrawTextRow(x, ref y, w, "  Throughput", ses.Tops > 0f ? $"{ses.Tops:F1} tok/s" : "—");
+            DrawTextRow(x, ref y, w, "  Tokens", $"{ses.promptTokens:N0}p / {ses.completionTokens:N0}c");
+
+            DrawTextRow(x, ref y, w, "This save", $"{sav.calls} calls");
+            DrawTextRow(x, ref y, w, "  Tokens", $"{sav.promptTokens:N0}p / {sav.completionTokens:N0}c");
+
+            // TOPS by model (session — current performance). Top few by throughput.
+            y += 4f;
+            GUI.color = RowDim;
+            Widgets.Label(new Rect(x, y, w, 18f), "TOPS by model (session)");
+            GUI.color = Color.white;
+            y += 20f;
+            if (ses.perModel.Count == 0)
+            {
+                GUI.color = RowDim;
+                Widgets.Label(new Rect(x + 8f, y, w - 8f, 18f), "(no calls yet)");
+                GUI.color = Color.white;
+                y += 18f;
+            }
+            else
+            {
+                var models = new List<KeyValuePair<string, SynapseCallMetrics.ModelStat>>(ses.perModel);
+                models.Sort((a, b) => b.Value.Tops.CompareTo(a.Value.Tops));
+                int shown = 0;
+                foreach (var m in models)
+                {
+                    if (shown++ >= 6) break;
+                    DrawTextRow(x + 8f, ref y, w - 8f, Trunc(m.Key, 22), $"{m.Value.Tops:F1} tok/s");
+                }
+            }
+
+            // Max call size per endpoint (per-save peak — judges the scaling mechanisms).
+            y += 4f;
+            GUI.color = RowDim;
+            Widgets.Label(new Rect(x, y, w, 18f), "Max call size (peak prompt)");
+            GUI.color = Color.white;
+            y += 20f;
+            if (sav.maxPromptByEndpoint.Count == 0)
+            {
+                GUI.color = RowDim;
+                Widgets.Label(new Rect(x + 8f, y, w - 8f, 18f), "(no calls yet)");
+                GUI.color = Color.white;
+                y += 18f;
+            }
+            else
+            {
+                foreach (var e in sav.maxPromptByEndpoint)
+                    DrawTextRow(x + 8f, ref y, w - 8f, Trunc(e.Key, 24), $"{e.Value:N0} tok");
+            }
+        }
+
+        private static string Trunc(string s, int max)
+        {
+            if (string.IsNullOrEmpty(s)) return "?";
+            int slash = s.LastIndexOf('/');
+            if (slash >= 0 && slash < s.Length - 1) s = s.Substring(slash + 1);
+            return s.Length <= max ? s : s.Substring(0, max - 1) + "…";
         }
 
         private static string GbStr(float mb) => mb > 0.5f ? $"{mb / 1024f:F1} GB" : "—";

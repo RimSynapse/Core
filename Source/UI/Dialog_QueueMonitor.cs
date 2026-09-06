@@ -80,8 +80,9 @@ namespace RimSynapse.UI
                 ResizeForMode(set.qmAdvancedView);
             }
 
-            // Left column: GPU / VRAM textual breakdown (always present).
-            DrawVramColumn(new Rect(0f, 0f, VramColWidth, inRect.height));
+            // Left column: GPU / VRAM textual breakdown (always present); when expanded to the call
+            // view it also carries the LLM metrics/history (#127).
+            DrawVramColumn(new Rect(0f, 0f, VramColWidth, inRect.height), advanced);
 
             if (!advanced) return;
 
@@ -150,22 +151,18 @@ namespace RimSynapse.UI
                 Find.WindowStack.Add(new FloatMenu(floatMenu));
             }
 
-            // Global stats
+            // Live queue state (throughput/token history now live in the left column, #127).
             Widgets.Label(new Rect(0, 40f, width, 20f),
-                $"Depth: {RequestQueue.QueueDepth}  |  Throttle: {RequestQueue.ThrottleLevel:P0}  |  Avg: {RequestQueue.AverageResponseMs:F0}ms  |  TOPS: {RequestQueue.GlobalTops:F1}");
+                $"Depth: {RequestQueue.QueueDepth}  |  Throttle: {RequestQueue.ThrottleLevel:P0}  |  Avg: {RequestQueue.AverageResponseMs:F0}ms");
 
-            // Provider Token Stats
-            Widgets.Label(new Rect(0, 62f, width, 20f),
-                $"Tokens:  Local: {set.tokensPromptLocal}p/{set.tokensCompletionLocal}c  |  OpenAI: {set.tokensPromptOpenAi}p/{set.tokensCompletionOpenAi}c  |  Gemini: {set.tokensPromptGemini}p/{set.tokensCompletionGemini}c  |  Claude: {set.tokensPromptClaude}p/{set.tokensCompletionClaude}c");
-
-            Widgets.DrawLineHorizontal(0, 86f, width);
+            Widgets.DrawLineHorizontal(0, 64f, width);
 
             // Table Header
-            Rect tableHeaderRect = new Rect(0, 96f, width - 16f, 25f);
+            Rect tableHeaderRect = new Rect(0, 74f, width - 16f, 25f);
             DrawMainHeader(tableHeaderRect);
 
             // Content Area — split between main queue and opportunistic
-            float mainQueueEndY = 126f;
+            float mainQueueEndY = 104f;
             float mainQueueHeight = (height - mainQueueEndY) * 0.6f;
             Rect mainOutRect = new Rect(0, mainQueueEndY, width, mainQueueHeight);
             
