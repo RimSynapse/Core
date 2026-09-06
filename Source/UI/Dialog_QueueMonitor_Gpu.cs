@@ -145,24 +145,28 @@ namespace RimSynapse.UI
                 }
             }
 
-            // Max call size per endpoint (per-save peak — judges the scaling mechanisms).
+            // Context: what LM Studio reports as the window vs the largest we've proven in use
+            // (per-save peak prompt+completion) — the headroom the scaling mechanisms are working with.
             y += 4f;
             GUI.color = RowDim;
-            Widgets.Label(new Rect(x, y, w, 18f), "Max call size (peak prompt)");
+            Widgets.Label(new Rect(x, y, w, 18f), "Context");
             GUI.color = Color.white;
             y += 20f;
-            if (sav.maxPromptByEndpoint.Count == 0)
+
+            int? reported = RimSynapse.Internal.ModelManager.ContextLength;
+            if (!reported.HasValue || reported.Value <= 0)
             {
-                GUI.color = RowDim;
-                Widgets.Label(new Rect(x + 8f, y, w - 8f, 18f), "(no calls yet)");
-                GUI.color = Color.white;
-                y += 18f;
+                int fallback = RimSynapseMod.Instance?.Settings?.modelContextLimit ?? 0;
+                reported = fallback > 0 ? fallback : (int?)null;
             }
-            else
-            {
-                foreach (var e in sav.maxPromptByEndpoint)
-                    DrawTextRow(x + 8f, ref y, w - 8f, Trunc(e.Key, 24), $"{e.Value:N0} tok");
-            }
+            DrawTextRow(x + 8f, ref y, w - 8f, "Reported max",
+                reported.HasValue ? $"{reported.Value:N0} tok" : "—");
+
+            int proven = sav.ProvenMaxContext();
+            string provenStr = proven > 0 ? $"{proven:N0} tok" : "—";
+            if (proven > 0 && reported.HasValue && reported.Value > 0)
+                provenStr += $"  ({(float)proven / reported.Value:P0})";
+            DrawTextRow(x + 8f, ref y, w - 8f, "Proven max", provenStr);
         }
 
         private static string Trunc(string s, int max)

@@ -38,10 +38,20 @@ namespace RimSynapse
             public long completionTokens;
             public double completionSeconds;
             public Dictionary<string, ModelStat> perModel = new Dictionary<string, ModelStat>();
-            public Dictionary<string, int> maxPromptByEndpoint = new Dictionary<string, int>();
+            /// <summary>Largest total context (prompt + completion) actually driven through each endpoint —
+            /// the "proven" context, against which the reported window can be judged.</summary>
+            public Dictionary<string, int> maxContextByEndpoint = new Dictionary<string, int>();
 
             /// <summary>Overall throughput in completion tokens/sec.</summary>
             public float Tops => completionSeconds > 0.0 ? (float)(completionTokens / completionSeconds) : 0f;
+
+            /// <summary>The largest proven context across all endpoints (0 if none recorded).</summary>
+            public int ProvenMaxContext()
+            {
+                int max = 0;
+                foreach (var v in maxContextByEndpoint.Values) if (v > max) max = v;
+                return max;
+            }
 
             public void Record(string model, string endpoint, int prompt, int completion, long durationMs, bool success)
             {
@@ -61,8 +71,9 @@ namespace RimSynapse
                 }
                 if (!string.IsNullOrEmpty(endpoint))
                 {
-                    maxPromptByEndpoint.TryGetValue(endpoint, out int cur);
-                    if (prompt > cur) maxPromptByEndpoint[endpoint] = prompt;
+                    int ctx = prompt + completion;
+                    maxContextByEndpoint.TryGetValue(endpoint, out int cur);
+                    if (ctx > cur) maxContextByEndpoint[endpoint] = ctx;
                 }
             }
 
@@ -74,11 +85,11 @@ namespace RimSynapse
                 Scribe_Values.Look(ref completionTokens, "completionTokens", 0L);
                 Scribe_Values.Look(ref completionSeconds, "completionSeconds", 0.0);
                 Scribe_Collections.Look(ref perModel, "perModel", LookMode.Value, LookMode.Deep);
-                Scribe_Collections.Look(ref maxPromptByEndpoint, "maxPromptByEndpoint", LookMode.Value, LookMode.Value);
+                Scribe_Collections.Look(ref maxContextByEndpoint, "maxContextByEndpoint", LookMode.Value, LookMode.Value);
                 if (Scribe.mode == LoadSaveMode.LoadingVars)
                 {
                     if (perModel == null) perModel = new Dictionary<string, ModelStat>();
-                    if (maxPromptByEndpoint == null) maxPromptByEndpoint = new Dictionary<string, int>();
+                    if (maxContextByEndpoint == null) maxContextByEndpoint = new Dictionary<string, int>();
                 }
             }
         }

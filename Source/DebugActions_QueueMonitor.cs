@@ -54,8 +54,10 @@ namespace RimSynapse
             sb.AppendLine($"  save:    {sav.calls} calls, {sav.promptTokens}p/{sav.completionTokens}c");
             foreach (var m in ses.perModel)
                 sb.AppendLine($"    model {m.Key}: {m.Value.Tops:F1} tok/s");
-            foreach (var e in sav.maxPromptByEndpoint)
-                sb.AppendLine($"    max call {e.Key}: {e.Value} tok");
+            int? reported = RimSynapse.Internal.ModelManager.ContextLength
+                            ?? RimSynapseMod.Instance?.Settings?.modelContextLimit;
+            sb.AppendLine($"  context: reported max {(reported.HasValue ? reported.Value.ToString() : "?")} tok, " +
+                          $"proven max {sav.ProvenMaxContext()} tok");
             SynapseLogger.Message(sb.ToString().TrimEnd());
         }
     }
