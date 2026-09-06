@@ -108,15 +108,26 @@ namespace RimSynapse.UI
                 Find.WindowStack.Add(new FloatMenu(floatMenu));
             }
 
-            Widgets.DrawLineHorizontal(0, 85f, inRect.width);
+            // View toggle: Basic (queue only) vs Advanced (adds the GPU/VRAM panel, #128).
+            Rect t4 = new Rect(inRect.width - 170f, 40f, 160f, 25f);
+            if (Widgets.ButtonText(t4, set.qmAdvancedView ? "View: Advanced ▾" : "View: Basic ▸"))
+                set.qmAdvancedView = !set.qmAdvancedView;
+
+            // GPU/VRAM panel (Advanced only) sits between the stats and the queue; everything below
+            // shifts down by its height so the queue layout stays intact in Basic view.
+            float panelTop = 84f;
+            float gpuH = set.qmAdvancedView ? DrawGpuPanel(inRect.width, panelTop) : 0f;
+
+            float dividerY = panelTop + gpuH + 1f;
+            Widgets.DrawLineHorizontal(0, dividerY, inRect.width);
 
             // Table Header
-            Rect tableHeaderRect = new Rect(0, 95f, inRect.width - 16f, 25f);
+            Rect tableHeaderRect = new Rect(0, dividerY + 10f, inRect.width - 16f, 25f);
             DrawMainHeader(tableHeaderRect);
 
             // Content Area — split between main queue and opportunistic
-            float mainQueueEndY = 125f;
-            float mainQueueHeight = (inRect.height - 125f) * 0.6f;
+            float mainQueueEndY = dividerY + 40f;
+            float mainQueueHeight = (inRect.height - mainQueueEndY) * 0.6f;
             Rect mainOutRect = new Rect(0, mainQueueEndY, inRect.width, mainQueueHeight);
             
             // Calculate main queue view height

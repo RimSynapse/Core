@@ -170,6 +170,9 @@ namespace RimSynapse
         public bool qmShowProvider = true;
         public bool qmShowModel = true;
 
+        /// <summary>Queue monitor Advanced view: adds the GPU/VRAM panel above the queue (Core #128).</summary>
+        public bool qmAdvancedView = false;
+
         // --- Capability tier and cost governance ---
 
         /// <summary>Tier selection: 0 = Auto (measured), 1 = Minimal, 2 = Standard, 3 = Rich.</summary>
@@ -403,6 +406,7 @@ namespace RimSynapse
             Scribe_Values.Look(ref qmShowResponse, "qmShowResponse", false);
             Scribe_Values.Look(ref qmShowProvider, "qmShowProvider", true);
             Scribe_Values.Look(ref qmShowModel, "qmShowModel", true);
+            Scribe_Values.Look(ref qmAdvancedView, "qmAdvancedView", false);
         }
     }
 }
