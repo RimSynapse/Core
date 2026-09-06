@@ -31,7 +31,30 @@ namespace RimSynapse.UI
         private float[] oppWidths = { 100f, 200f, 60f, 120f, 80f, 100f, 180f };
         private int draggingOppCol = -1;
 
-        public override Vector2 InitialSize => new Vector2(1200f, 750f);
+        private static readonly Vector2 AdvancedSize = new Vector2(1200f, 750f);
+
+        public override Vector2 InitialSize =>
+            (RimSynapseMod.Instance?.Settings?.qmAdvancedView ?? false) ? AdvancedSize : BasicSize();
+
+        /// <summary>Compact window size for the Basic (VRAM) view — just tall enough for the panel's
+        /// rows, so the view doesn't sit in a half-empty 1200×750 frame.</summary>
+        private static Vector2 BasicSize()
+        {
+            VramBreakdown.Refresh();
+            int rows = 2 + VramBreakdown.Consumers.Count + (VramBreakdown.Measured ? 1 : 0);
+            // top strip + GPU line + VRAM bar + breakdown rows + padding + window chrome
+            float h = 30f + 30f + 26f + rows * 20f + 12f + 46f;
+            return new Vector2(560f, h);
+        }
+
+        /// <summary>Resize the open window to fit the mode being switched to.</summary>
+        private void ResizeForMode(bool advanced)
+        {
+            Vector2 sz = advanced ? AdvancedSize : BasicSize();
+            windowRect.width = sz.x;
+            windowRect.height = sz.y;
+            windowRect = windowRect.Rounded();
+        }
 
         public Dialog_QueueMonitor()
         {
@@ -49,24 +72,26 @@ namespace RimSynapse.UI
             var set = RimSynapseMod.Instance.Settings;
             bool advanced = set.qmAdvancedView;
 
-            // Header + view toggle (always shown). Basic = GPU/VRAM at a glance; Advanced = all LLM
-            // calls (queue, tables, stats). #128.
-            Text.Font = GameFont.Medium;
-            Widgets.Label(new Rect(0, 0, inRect.width - 180f, 35f), "RimSynapse Monitor");
-            Text.Font = GameFont.Small;
-
-            Rect viewBtn = new Rect(inRect.width - 170f, 6f, 160f, 25f);
+            // View toggle (always). Basic = GPU/VRAM at a glance; Advanced = all LLM calls. #128.
+            Rect viewBtn = new Rect(inRect.width - 170f, 4f, 160f, 24f);
             if (Widgets.ButtonText(viewBtn, advanced ? "View: LLM calls ▾" : "View: VRAM ▸"))
+            {
                 set.qmAdvancedView = !set.qmAdvancedView;
+                ResizeForMode(set.qmAdvancedView);
+            }
 
-            // ── Basic view: GPU / VRAM only ──
+            // ── Basic view: GPU / VRAM only (compact) ──
             if (!advanced)
             {
-                DrawGpuPanel(inRect.width, 40f);
+                DrawGpuPanel(inRect.width, 30f);
                 return;
             }
 
             // ── Advanced view: all LLM calls ──
+            Text.Font = GameFont.Medium;
+            Widgets.Label(new Rect(0, 0, inRect.width - 180f, 35f), "RimSynapse Monitor");
+            Text.Font = GameFont.Small;
+
             HandleColumnDragging();
 
             var queueSnapshot = RequestQueue.GetQueueSnapshot();
