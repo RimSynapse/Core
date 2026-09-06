@@ -60,5 +60,28 @@ namespace RimSynapse
                           $"proven max {sav.ProvenMaxContext()} tok");
             SynapseLogger.Message(sb.ToString().TrimEnd());
         }
+
+        [DebugAction("RimSynapse", "Capture screenshot to repo (workshop)",
+            allowedGameStates = AllowedGameStates.Entry | AllowedGameStates.Playing)]
+        private static void CaptureScreenshotToRepo()
+        {
+            try
+            {
+                string root = System.Environment.GetEnvironmentVariable("RIMSYNAPSE_ROOT");
+                if (string.IsNullOrEmpty(root)) root = System.IO.Path.Combine(GenFilePaths.ConfigFolderPath, "RimSynapse");
+                string dir = System.IO.Path.Combine(root, "About", "steam_screenshots");
+                System.IO.Directory.CreateDirectory(dir);
+                string path = System.IO.Path.Combine(dir, $"monitor_{System.DateTime.Now:yyyyMMdd_HHmmss}.png");
+
+                // Unity's own capture — writes the full framebuffer to disk a frame later. Bypasses the
+                // external screen-grab tooling entirely (headless-safe).
+                UnityEngine.ScreenCapture.CaptureScreenshot(path);
+                SynapseLogger.Message($"[RimSynapse] Screenshot requested -> {path} (written within a frame or two).");
+            }
+            catch (System.Exception ex)
+            {
+                SynapseLogger.Warning("Screenshot capture failed: " + ex.Message);
+            }
+        }
     }
 }

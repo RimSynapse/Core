@@ -38,3 +38,4 @@ Assemblies/*.dll
 # never committed and never shipped - the release payload allowlist excludes this folder.
 TestAssemblies/
 Source.Tests/obj/
+About/steam_screenshots/
