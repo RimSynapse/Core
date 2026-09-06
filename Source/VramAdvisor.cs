@@ -133,29 +133,44 @@ namespace RimSynapse
 
             float lmEstimateGb = EstimateModelVramGb(modelName);
 
-            // RimWorld itself typically uses 0.5-1.5 GB VRAM
-            float rwEstimateGb = 1.0f;
+            // Prefer a MEASURED free-VRAM figure (Core #125) over the old estimate. The meter reports
+            // system-wide dedicated usage — RimWorld, an on-machine LM Studio, and the desktop are all
+            // already counted — so when it answers we use total − measuredUsed directly and never add
+            // the per-component estimates on top (that would double-count the model).
+            bool measured = VramMeter.Sample();
+            float usedGb, freeGb;
+            if (measured)
+            {
+                if (VramMeter.TotalMb > 0f) totalGpuGb = VramMeter.TotalMb / 1024f;
+                usedGb = VramMeter.UsedMb / 1024f;
+                freeGb = VramMeter.FreeMb / 1024f;
 
-            // System/desktop overhead (DWM, compositor, background apps)
-            // Windows 11 with Chrome/Discord easily uses 2-4 GB
-            float systemEstimateGb = 2.5f;
+                SynapseLogger.Warning(
+                    $"VRAM Advisor (measured): {totalGpuGb:F1} GB total, " +
+                    $"{usedGb:F1} GB used system-wide, {freeGb:F1} GB free " +
+                    $"(model {modelName ?? "none"} ~{lmEstimateGb:F1} GB).");
+            }
+            else
+            {
+                // Fallback estimate: model + a nominal RimWorld slice + desktop/background overhead.
+                const float rwEstimateGb = 1.0f;     // RimWorld itself typically uses 0.5-1.5 GB
+                const float systemEstimateGb = 2.5f; // DWM/compositor/background apps (Win11 + Chrome/Discord)
+                usedGb = lmEstimateGb + rwEstimateGb + systemEstimateGb;
+                freeGb = totalGpuGb - usedGb;
 
-            float estimatedUsedGb = lmEstimateGb + rwEstimateGb + systemEstimateGb;
-            float estimatedFreeGb = totalGpuGb - estimatedUsedGb;
-
-            SynapseLogger.Warning(
-                $"VRAM Advisor (Logging): {totalGpuGb:F1} GB total, " +
-                $"~{lmEstimateGb:F1} GB model ({modelName ?? "none"}), " +
-                $"~{rwEstimateGb:F1} GB RimWorld, " +
-                $"~{systemEstimateGb:F1} GB system. " +
-                $"Est. free: ~{estimatedFreeGb:F1} GB.");
+                SynapseLogger.Warning(
+                    $"VRAM Advisor (estimate): {totalGpuGb:F1} GB total, " +
+                    $"~{lmEstimateGb:F1} GB model ({modelName ?? "none"}), " +
+                    $"~{rwEstimateGb:F1} GB RimWorld, ~{systemEstimateGb:F1} GB system. " +
+                    $"Est. free: ~{freeGb:F1} GB.");
+            }
 
             if (!showNotify || _nvidiaToolHandlesVram || isRemoteHost)
             {
                 return;
             }
 
-            ShowAdvisory(totalGpuGb, lmEstimateGb, estimatedFreeGb, modelName);
+            ShowAdvisory(totalGpuGb, lmEstimateGb, freeGb, modelName, measured, usedGb);
         }
 
     }
