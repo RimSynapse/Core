@@ -7,7 +7,7 @@ using RimSynapse.Models;
 
 namespace RimSynapse.Comps
 {
-    public class SynapseCorePawnComp : ThingComp
+    public partial class SynapseCorePawnComp : ThingComp
     {
         public List<WeightedMemory> memories = new List<WeightedMemory>();
         
@@ -147,6 +147,7 @@ namespace RimSynapse.Comps
 
             Scribe_Values.Look(ref lastDecayTick, "lastDecayTick", -1);
             Scribe_Values.Look(ref lastOpinionTick, "lastOpinionTick", -1);
+            Scribe_Values.Look(ref lastPentadDay, "lastPentadDay", -1); // memory compaction pentad cadence (#131)
             Scribe_Values.Look(ref memoryScaleVersion, "memoryScaleVersion", 0);
             Scribe_Values.Look(ref traitPressureKeyVersion, "traitPressureKeyVersion", 0);
             
@@ -404,6 +405,11 @@ namespace RimSynapse.Comps
             CoalesceExistingDuplicates(); // #129: collapse duplicate clusters so mature saves shrink
             RecomputeSalienceAndConsolidate();
             DoMemoryDecay();
+
+            // Automatic memory compaction (#131): fold aged-out unremarkable memories into a richer few.
+            // Runs after consolidate/decay so protection-by-salience is current and decayed memories are
+            // already gone. Selection is deterministic here; the LLM writes the prose on the async apply.
+            MaybeCompact();
 
             // Trait pressures ebb toward 0 on days without fresh evidence (design §4.2/§5.7).
             long now = Find.TickManager != null ? Find.TickManager.TicksAbs : 0L;
