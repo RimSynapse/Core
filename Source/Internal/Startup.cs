@@ -1,4 +1,3 @@
-using RimWorld;
 using Verse;
 
 namespace RimSynapse.Internal
@@ -10,11 +9,12 @@ namespace RimSynapse.Internal
         {
             RimSynapse.SynapseLogger.InitMainThread();
 
-            // Seed the letter-enhancement whitelist (Core #134). Only whitelisted letters are held for
-            // LLM rewrite / storyteller TTS; everything else is vanilla, so time-critical alerts (e.g. a
-            // crash-pod rescue) arrive on time. Raids are the one hook we ship enabled; other event types
-            // opt in by registering their own hook.
-            RimSynapse.SynapseLetterEnhancement.RegisterLetterDef(LetterDefOf.ThreatBig.defName);
+            // Letter-enhancement whitelist (Core #134) ships EMPTY and dormant: nothing is intercepted,
+            // so every vanilla letter fires unchanged. Intercepting letters (even raids) conflicts with
+            // mods that own that logic — e.g. World Domination 2.0 — and could delay time-critical
+            // alerts, so RimSynapse no longer rewrites/holds letters. World enrichment now comes from an
+            // additive, external source (WorldNews-style world-event notifications feeding the
+            // storyteller), not by quieting vanilla. The registry stays available for opt-in hooks.
         }
     }
 }
