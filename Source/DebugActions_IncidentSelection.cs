@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using LudeonTK;
 using RimWorld;
 using Verse;
@@ -79,10 +80,18 @@ namespace RimSynapse
                 sb.AppendLine($"  vanilla fallback [{category.defName}]: {(fb?.def?.defName ?? "(none eligible)")}");
             }
 
-            // Kick the live async selection (uses the LLM when online; the queue path revalidates on fire).
-            var chosen = IncidentCategoryDefOf.ThreatBig;
-            sb.AppendLine($"  kicking live async selection for '{chosen.defName}' (result lands via IncidentQueue if online)...");
-            SynapseStorytellerOpportunistic.TriggerEventSelection(chosen, target);
+            // #135 full pool: the LLM chooses across ALL categories that can fire now, not one.
+            string fullPool = SynapseStorytellerOpportunistic.DebugFullEventPool(target);
+            int poolCount = fullPool.Split('\n').Count(l => l.TrimStart().StartsWith("- '"));
+            var cats = System.Text.RegularExpressions.Regex.Matches(fullPool, @"\[([^\]]+)\]")
+                .Cast<System.Text.RegularExpressions.Match>().Select(m => m.Groups[1].Value).Distinct().ToList();
+            sb.AppendLine($"  #135 full event pool: {poolCount} events across {cats.Count} categories " +
+                          $"[{string.Join(", ", cats)}] {(cats.Count > 1 ? "-> full-pool OK" : "(single/none)")}");
+
+            // Kick the live async selection over the FULL pool (null category, #135). Uses the LLM when
+            // online; the queue path revalidates CanFireNow on fire.
+            sb.AppendLine($"  kicking live async FULL-POOL selection (result lands via IncidentQueue if online)...");
+            SynapseStorytellerOpportunistic.TriggerEventSelection(null, target);
             }
             finally
             {
@@ -94,6 +103,25 @@ namespace RimSynapse
                 }
             }
 
+            SynapseLogger.Message(sb.ToString().TrimEnd());
+        }
+
+        [DebugAction("RimSynapse", "Storyteller: dump full event pool (#135)",
+            allowedGameStates = AllowedGameStates.PlayingOnMap)]
+        private static void DumpFullEventPool()
+        {
+            var target = (IIncidentTarget)Find.CurrentMap;
+            string pool = SynapseStorytellerOpportunistic.DebugFullEventPool(target);
+
+            var lines = pool.Split('\n').Where(l => l.TrimStart().StartsWith("- '")).ToList();
+            var cats = Regex.Matches(pool, @"\[([^\]]+)\]").Cast<Match>()
+                .Select(m => m.Groups[1].Value).Distinct().ToList();
+
+            var sb = new StringBuilder();
+            sb.AppendLine("[RimSynapse] #135 full event pool (every event that can fire now, all categories):");
+            sb.AppendLine($"  {lines.Count} events across {cats.Count} categories [{string.Join(", ", cats)}]");
+            sb.AppendLine($"  RESULT: {(cats.Count > 1 ? "PASS — LLM chooses across all categories, not one" : "single/none available")}");
+            foreach (var l in lines.Take(8)) sb.AppendLine("   " + l.Trim());
             SynapseLogger.Message(sb.ToString().TrimEnd());
         }
     }
