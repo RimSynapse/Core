@@ -10,6 +10,27 @@ namespace RimSynapse.Models
         public List<string> tags = new List<string>();
         public List<string> subjectPawnIds = new List<string>();
         public bool isLongTerm = false;
+
+        // ── Involvement roster (Core #103) ──
+        // Who actually experienced the underlying event, so a consumer can tell whether a given pawn
+        // legitimately shares this memory first-hand or is a stranger to it. Canonical LoadIds (Core
+        // #80 convention, same as subjectPawnIds). Both empty for legacy/non-event memories, which
+        // SynapseCoreMemory.InvolvementOf resolves to None — the safe default (a non-owner never reads
+        // as first-hand). The FIRST involved id is treated as the protagonist.
+        /// <summary>Pawns who experienced this memory first-hand (protagonist + co-participants).</summary>
+        public List<string> involvedPawnIds = new List<string>();
+        /// <summary>Pawns who witnessed the event but did not take part in it.</summary>
+        public List<string> witnessPawnIds = new List<string>();
+
+        /// <summary>Source <see cref="PastEvent.eventId"/> when this memory was derived from a recorded
+        /// event (Core #103/#129). Lets memories tracing to one event — witness and participant alike —
+        /// coalesce into a single record, and ties the involvement roster back to its origin. Null for
+        /// memories not derived from an event.</summary>
+        public string sourceEventId = null;
+
+        /// <summary>How many times this memory has been reinforced by a coalesced duplicate (Core #129).
+        /// 1 for a fresh memory; higher when repeated near-identical observations collapsed into it.</summary>
+        public int occurrenceCount = 1;
         
         /// <summary>Absolute tick when this memory occurred. Used for date display and chronological sorting.</summary>
         public long absTick;
@@ -66,6 +87,10 @@ namespace RimSynapse.Models
             Scribe_Values.Look(ref timesReferenced, "timesReferenced", 0);
             Scribe_Values.Look(ref isLongTerm, "isLongTerm", false);
             Scribe_Collections.Look(ref subjectPawnIds, "subjectPawnIds", LookMode.Value);
+            Scribe_Collections.Look(ref involvedPawnIds, "involvedPawnIds", LookMode.Value);
+            Scribe_Collections.Look(ref witnessPawnIds, "witnessPawnIds", LookMode.Value);
+            Scribe_Values.Look(ref sourceEventId, "sourceEventId", null);
+            Scribe_Values.Look(ref occurrenceCount, "occurrenceCount", 1);
 
             // Stage 1 additive fields — absent in old saves ⇒ Scribe default, then initialised in the
             // comp's PostLoadInit migration (memId, lastReferencedTick) and the daily pass (salience).
@@ -81,6 +106,8 @@ namespace RimSynapse.Models
                 if (tags == null) tags = new List<string>();
                 if (subjectPawnIds == null) subjectPawnIds = new List<string>();
                 if (linkedMemoryIds == null) linkedMemoryIds = new List<string>();
+                if (involvedPawnIds == null) involvedPawnIds = new List<string>();
+                if (witnessPawnIds == null) witnessPawnIds = new List<string>();
             }
         }
 

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  RimSynapse Core — Compacted memory classes (#131).
+
+  Products of automatic memory compaction: unremarkable memories folded into a richer few. Both tiers
+  still DECAY (they are recent noise-reduction, not identity anchors) but slower than the raw social
+  chatter they replaced, and they contribute strongly to a neighbour's salience so a fold can still help
+  promote a linked significant memory. The long-horizon narrative tiers (Compacted_Quadrum/_Year, dated,
+  born long-term) are tabled in #133 and are NOT defined here.
+-->
+<Defs>
+
+  <!-- One day's folded memories. Persists a bit longer than raw social chatter, then fades unless a
+       linked significant event promotes it. -->
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_CompactedDay</defName>
+    <memoryType>Compacted_Day</memoryType>
+    <baseWeight>0.25</baseWeight>
+    <decayRate>0.1</decayRate>
+    <bornLongTerm>false</bornLongTerm>
+    <consolidationContribution>0.6</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
+  <!-- Several days folded into one. A step more durable than a single day, still not permanent. -->
+  <RimSynapse.SynapseMemoryClassDef>
+    <defName>SynapseMemoryClass_CompactedPentad</defName>
+    <memoryType>Compacted_Pentad</memoryType>
+    <baseWeight>0.35</baseWeight>
+    <decayRate>0.06</decayRate>
+    <bornLongTerm>false</bornLongTerm>
+    <consolidationContribution>0.7</consolidationContribution>
+  </RimSynapse.SynapseMemoryClassDef>
+
+</Defs>
