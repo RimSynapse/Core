@@ -104,6 +104,11 @@ namespace RimSynapse.Comps
         public static int ReferenceThreshold = 3;
         public static float TraitPressureDecayPerDay = 0.2f;
 
+        /// <summary>Time window (ticks) for heuristic coalescing of event-less witness memories (Core
+        /// #129). Same-event memories coalesce regardless of window; this bounds the "same type + same
+        /// subjects" fallback. Default ~2 in-game days.</summary>
+        public static int CoalesceWindowTicks = 120000;
+
         public override void PostExposeData()
         {
             base.PostExposeData();
@@ -396,6 +401,7 @@ namespace RimSynapse.Comps
             RebuildMemoryIndexes();
             foreach (var mem in memories) mem.EnsureMemId();
 
+            CoalesceExistingDuplicates(); // #129: collapse duplicate clusters so mature saves shrink
             RecomputeSalienceAndConsolidate();
             DoMemoryDecay();
 
@@ -597,9 +603,169 @@ namespace RimSynapse.Comps
         {
             if (memory == null) return;
             NormalizeMemory(memory);
+
+            // Coalesce-on-write (Core #129): fold a duplicate into an existing record instead of adding
+            // a near-identical one. Reached via the same path every producer uses, so the store
+            // self-dedups regardless of who mints the memory.
+            var target = TryFindCoalesceTarget(memory);
+            if (target != null)
+            {
+                CoalesceInto(target, memory);
+                return;
+            }
+
             memory.EnsureMemId();
             memories.Add(memory);
             IndexMemory(memory);
+        }
+
+        /// <summary>
+        /// Find an existing memory that <paramref name="incoming"/> should merge into (Core #129), or
+        /// null to add it as new. Two rules: (1) same <see cref="WeightedMemory.sourceEventId"/> — the
+        /// same event, any tier, always coalesces; (2) event-less witness filler — when the owner is a
+        /// witness (not a first-hand participant) of the incoming memory, an existing witness memory of
+        /// the same type + same subjects within <see cref="CoalesceWindowTicks"/> coalesces. First-hand
+        /// and significant memories of distinct events are never merged by the heuristic.
+        /// </summary>
+        private WeightedMemory TryFindCoalesceTarget(WeightedMemory incoming)
+        {
+            if (incoming.isLongTerm) return null;
+
+            // (1) same source event
+            if (!string.IsNullOrEmpty(incoming.sourceEventId))
+            {
+                foreach (var m in memories)
+                    if (m.sourceEventId == incoming.sourceEventId) return m;
+            }
+
+            // (2) event-less witness filler
+            var owner = parent as Pawn;
+            if (owner == null) return null;
+            string ownerId = MemoryPawnId(owner);
+            bool ownerFirsthand = incoming.involvedPawnIds != null && incoming.involvedPawnIds.Contains(ownerId);
+            bool ownerWitness = incoming.witnessPawnIds != null && incoming.witnessPawnIds.Contains(ownerId);
+            if (ownerFirsthand || !ownerWitness) return null; // only collapse owner-witness memories
+
+            foreach (var m in memories)
+            {
+                if (m.isLongTerm) continue;
+                if (m.memoryType != incoming.memoryType) continue;
+                if (!SameSubjects(m, incoming)) continue;
+                // must also be a witness memory for the owner and within the window
+                if (m.involvedPawnIds != null && m.involvedPawnIds.Contains(ownerId)) continue;
+                if (m.witnessPawnIds == null || !m.witnessPawnIds.Contains(ownerId)) continue;
+                if (System.Math.Abs(m.absTick - incoming.absTick) > CoalesceWindowTicks) continue;
+                return m;
+            }
+            return null;
+        }
+
+        private static bool SameSubjects(WeightedMemory a, WeightedMemory b)
+        {
+            var sa = a.subjectPawnIds ?? new List<string>();
+            var sb = b.subjectPawnIds ?? new List<string>();
+            if (sa.Count != sb.Count) return false;
+            foreach (var id in sa) if (!sb.Contains(id)) return false;
+            return true;
+        }
+
+        /// <summary>Fold <paramref name="incoming"/> into <paramref name="target"/> (Core #129): bump the
+        /// occurrence count, reinforce weight and recency, take the most recent date, and union the
+        /// rosters/tags with first-hand winning over witness. No new record is stored.</summary>
+        private void CoalesceInto(WeightedMemory target, WeightedMemory incoming)
+        {
+            target.occurrenceCount += System.Math.Max(1, incoming.occurrenceCount);
+
+            // Reinforce: repetition strengthens the memory, but never past 1.0. Keep the stronger base.
+            target.weight = Clamp01(System.Math.Max(target.weight, incoming.weight) + 0.05f);
+            target.baseWeight = Clamp01(System.Math.Max(target.baseWeight, incoming.baseWeight));
+
+            if (incoming.absTick > target.absTick) target.absTick = incoming.absTick;
+            long now = Find.TickManager != null ? Find.TickManager.TicksAbs : target.lastReferencedTick;
+            if (now > target.lastReferencedTick) target.lastReferencedTick = now;
+            target.timesReferenced += 1;
+
+            MergeInto(target.subjectPawnIds, incoming.subjectPawnIds);
+            MergeInto(target.tags, incoming.tags);
+            MergeInto(target.linkedMemoryIds, incoming.linkedMemoryIds);
+
+            // Involvement: first-hand wins over witness. Union involved, then witnesses not already involved.
+            if (incoming.involvedPawnIds != null)
+                foreach (var id in incoming.involvedPawnIds)
+                {
+                    if (!target.involvedPawnIds.Contains(id)) target.involvedPawnIds.Add(id);
+                    target.witnessPawnIds.Remove(id);
+                }
+            if (incoming.witnessPawnIds != null)
+                foreach (var id in incoming.witnessPawnIds)
+                    if (!target.involvedPawnIds.Contains(id) && !target.witnessPawnIds.Contains(id))
+                        target.witnessPawnIds.Add(id);
+
+            // Subjects/tags may have grown; re-index cleanly (IndexMemory appends, so unindex first).
+            UnindexMemory(target);
+            IndexMemory(target);
+        }
+
+        private static void MergeInto(List<string> dst, List<string> src)
+        {
+            if (dst == null || src == null) return;
+            foreach (var s in src) if (!dst.Contains(s)) dst.Add(s);
+        }
+
+        /// <summary>Retro-coalesce existing duplicate clusters (Core #129) so mature saves shrink, not
+        /// just newly-added memories. Pass A merges records sharing a <see cref="WeightedMemory.sourceEventId"/>;
+        /// pass B merges event-less owner-witness filler of the same type + subjects within the window.
+        /// Long-term memories are left intact.</summary>
+        private void CoalesceExistingDuplicates()
+        {
+            if (memories.Count < 2) return;
+            var toRemove = new List<WeightedMemory>();
+
+            // Pass A: same source event (any tier).
+            var keeperByEvent = new Dictionary<string, WeightedMemory>();
+            foreach (var m in memories)
+            {
+                if (m.isLongTerm || string.IsNullOrEmpty(m.sourceEventId)) continue;
+                if (keeperByEvent.TryGetValue(m.sourceEventId, out var keep))
+                {
+                    CoalesceInto(keep, m);
+                    toRemove.Add(m);
+                }
+                else keeperByEvent[m.sourceEventId] = m;
+            }
+
+            // Pass B: event-less owner-witness filler, keyed by type + sorted subjects, within window.
+            var owner = parent as Pawn;
+            if (owner != null)
+            {
+                string ownerId = MemoryPawnId(owner);
+                var keeperByKey = new Dictionary<string, WeightedMemory>();
+                foreach (var m in memories)
+                {
+                    if (m.isLongTerm || toRemove.Contains(m)) continue;
+                    if (!string.IsNullOrEmpty(m.sourceEventId)) continue;
+                    bool ownerFirsthand = m.involvedPawnIds != null && m.involvedPawnIds.Contains(ownerId);
+                    bool ownerWitness = m.witnessPawnIds != null && m.witnessPawnIds.Contains(ownerId);
+                    if (ownerFirsthand || !ownerWitness) continue;
+
+                    var subs = new List<string>(m.subjectPawnIds ?? new List<string>());
+                    subs.Sort();
+                    string key = m.memoryType + "|" + string.Join(",", subs);
+                    if (keeperByKey.TryGetValue(key, out var keep)
+                        && System.Math.Abs(keep.absTick - m.absTick) <= CoalesceWindowTicks)
+                    {
+                        CoalesceInto(keep, m);
+                        toRemove.Add(m);
+                    }
+                    else keeperByKey[key] = m;
+                }
+            }
+
+            if (toRemove.Count > 0)
+            {
+                foreach (var m in toRemove) memories.Remove(m);
+                RebuildMemoryIndexes();
+            }
         }
 
         /// <summary>
