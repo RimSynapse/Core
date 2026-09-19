@@ -147,7 +147,7 @@ reference assemblies, which are not available there. **Run it by hand before eve
   `0.6.2` over a 0.7 source tree — internally consistent, and wrong. A version bump is
   still a human decision at cut time.
 - `sync-wiki.ps1` **skips** a repo whose wiki has never been initialised, and a skip is a
-  pass. NVIDIA-Tool is skipped today. GitHub only creates the wiki repo after the first
+  pass. GitHub only creates the wiki repo after the first
   page is made in the web UI, so an uninitialised wiki is invisible to the gate rather
   than caught by it.
 
@@ -363,7 +363,6 @@ Run these in order. Every step exists because skipping it has shipped a defect.
    | Conversations | 3768363934 |
    | Factions | 3767279097 |
    | WorldNews | 3768365293 |
-   | NVIDIA-Tool | 3760830285 |
    | AuraAlgorithm | 3768364958 |
 8. **Tell the user to upload the new builds** through the in-game uploader (Core first —
    companions declare a dependency on it). This is the one step that cannot be automated:

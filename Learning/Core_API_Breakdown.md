@@ -45,7 +45,7 @@ For advanced modding scenarios, you can dispatch direct typed requests:
 - **`SynapseClient.ActiveModelName`**: The name of the currently loaded model.
 - **`SynapseClient.TotalQueueDepth`**: The number of pending requests across all mods.
 - **`SynapseClient.ThrottleLevel`**: The current dynamic game-speed throttle.
-- **`SynapseClient.Gpu`**: Exposes real-time VRAM/GPU stats populated by the NVIDIA integration tool.
+- **`SynapseClient.Gpu`**: Exposes real-time VRAM/GPU stats from Core's built-in, vendor-agnostic VRAM monitoring.
 
 ---
 
@@ -288,5 +288,5 @@ per-process NVML enumeration):
     modId; a non-resident (CPU) consumer reports 0.
 *   `SynapseClient.Gpu.ConsumersSnapshot()` — thread-safe copy for a monitor mod's UI read.
 *   `SynapseClient.Gpu.RemoveConsumer(modId)` — drop the row entirely (e.g. on dispose).
-*   Producer: Local TTS registers Kokoro's footprint. Consumer: the NVIDIA Tool renders each
-    resident consumer as its own VRAM breakdown line, subtracted from "System".
+*   Producer: a local text-to-speech mod registers its model's footprint. Consumer: Core's
+    VRAM breakdown renders each resident consumer as its own line, subtracted from "System".

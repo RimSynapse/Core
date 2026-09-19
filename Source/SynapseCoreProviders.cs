@@ -207,7 +207,7 @@ namespace RimSynapse
         }
 
         // ---------------------------------------------------------------------------------------
-        // Text-to-speech — owned by RimSynapse - Local Text to Speech.
+        // Text-to-speech — routed to an installed local text-to-speech mod when one is present.
         // ---------------------------------------------------------------------------------------
 
         private static Func<string, string, Action<byte[]>, bool> textToSpeech;

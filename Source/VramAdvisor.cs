@@ -13,15 +13,13 @@ namespace RimSynapse
     /// headroom for both RimWorld and their loaded LLM model. If headroom is
     /// tight, shows a non-blocking notification with suggestions.
     ///
-    /// For detailed real-time GPU monitoring, points users to the companion
-    /// mod RimSynapse NVIDIA Tool.
     ///
     /// NOT a GameComponent — zero save-file footprint. Safe to add/remove.
     /// </summary>
     public static partial class VramAdvisor
     {
-        /// <summary>Minimum recommended free VRAM in GB (higher than NVIDIA Tool
-        /// since our estimates are less precise than real NVML data).</summary>
+        /// <summary>Minimum recommended free VRAM in GB (kept conservative since these
+        /// estimates are less precise than direct vendor telemetry).</summary>
         private const float MinFreeGb = 4.0f;
 
         /// <summary>
@@ -35,8 +33,8 @@ namespace RimSynapse
 
         internal static void Check()
         {
-            // Core owns the GPU/VRAM breakdown outright since 0.10 (#124): the NVIDIA-Tool companion
-            // is retired and its vendor-neutral functionality lives here now. No deferral to check.
+            // Core owns the GPU/VRAM breakdown outright since 0.10 (#124): vendor-neutral VRAM
+            // monitoring is built in here. No deferral to check.
 
             // Run the model query on a background thread with delay.
             // At startup, HttpEngine and LM Studio need a few seconds to be ready.
@@ -113,7 +111,7 @@ namespace RimSynapse
             }
             // ── Model found — LM Studio is alive ──
             // Now decide whether to show the VRAM breakdown.
-            // If NVIDIA Tool handles VRAM, or user disabled notifications, skip it.
+            // If the host is remote, or the user disabled notifications, skip it.
             bool isRemoteHost = RimSynapseMod.Instance?.Settings?.IsRemoteUrl ?? false;
 
             float lmEstimateGb = EstimateModelVramGb(modelName);
