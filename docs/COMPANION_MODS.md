@@ -272,3 +272,51 @@ Current slots:
     Consumers call `SynapseSpeech.TrySpeak`, which hands your provider the request off the
     caller's thread. Core's own call sites (storyteller chat replies, letter reactions) sit
     behind default-off mod settings.
+
+## 14. Building a storyteller persona (0.10)
+
+A storyteller's voice is a `StorytellerPersonaDef` (namespace `RimSynapse.Personas`), not
+code — so a persona ships as XML and needs no assembly. The engine (Core) reads whichever
+persona the active RimSynapse storyteller names (`personaDefName` on
+`StorytellerCompProperties_Storyteller`, defaulting to `Aura`), selects the entry for the
+live difficulty, and regenerates the beat's notification through the LLM using the persona
+prompt + prose exemplars + the event payload. The prose exemplars are the deterministic
+fallback when the LLM is offline, so a beat is never silently empty.
+
+Per difficulty (`Peaceful | Easy | Medium | Rough | Hard | Extreme | Custom`) an entry
+carries a `<personaPrompt>` (the personality instruction handed to the LLM) and `<prose>`
+with one or more lines for each beat: `kickoff`, `resolutionPositive`, `resolutionNegative`,
+`callback`, `idle`. `<fourthWall>true</fourthWall>` says the persona addresses the player and
+knows it authors the story (Aura); set it false for a diegetic voice. The `Custom` entry may
+also carry `<shiftQuips>` — `{slider, dir, text}` templates the engine surfaces when it
+detects a notable custom-difficulty deviation (e.g. `insectoids`/`off`). A load-time
+`ConfigErrors()` linter rejects a persona missing any difficulty or beat, so a half-authored
+voice fails fast. Copy `Defs/StorytellerPersonas/Persona_Aura.xml`, rename the def, rewrite
+the prompts and prose, and your storyteller loads alongside Aura.
+
+## 15. Publishing world events to the storyteller (0.10)
+
+If your mod generates world events (news, off-map incidents, faction moves), publish them to
+the storyteller through the broadcast surface on `SynapseCoreContext` — the storyteller then
+reads the pending set as incident-selection context and weight and may manifest a qualifying
+one **at** the colony. It is purely additive: it never suppresses vanilla, and with no
+publisher the storyteller is exactly stock (source-gated).
+
+The surface is deliberately all primitives so you register it by reflection and **build with
+Core absent**:
+
+```csharp
+var t = GenTypes.GetTypeInAnyAssembly("RimSynapse.SynapseCoreContext");
+t?.GetMethod("PublishWorldEvent")?.Invoke(null, new object[] {
+    kind,        // string — matched against incident defNames, e.g. "Flu", "Raid"
+    region,      // string — coarse location, for flavour ("" if none)
+    magnitude,   // float  — severity/scale; nudges selection weight (0 if unknown)
+    origin,      // string — faction/source name ("" if none)
+    summary,     // string — one-line human description for the selection prompt
+    ttlTicks     // int    — how long it stays live; <= 0 uses ~2 days
+});
+```
+
+Core buffers the event (with expiry), notes it in the storyteller's selection prompt, and
+boosts the weight of any incident whose def name matches `kind`. Match the felt outcome to
+your fiction by choosing a `kind` that maps to the incident you want it to become.
