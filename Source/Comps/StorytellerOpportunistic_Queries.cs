@@ -197,6 +197,10 @@ Analyze the situation and provide the PacingMultiplier and CategoryMultipliers."
             string openThreads = coreWorldComp?.WorldHistoryContextBlock();
             if (!string.IsNullOrEmpty(openThreads)) systemPrompt += "\n\n" + openThreads;
 
+            // World events an external source pushed in (Core #135) — additive, empty when no source.
+            string worldEvents = SynapseWorldEventInbox.SelectionContextNote(Find.TickManager?.TicksAbs ?? 0);
+            if (!string.IsNullOrEmpty(worldEvents)) systemPrompt += "\n\n" + worldEvents;
+
             string userMessage = $@"Colony Status:
 {metrics}
 
@@ -431,6 +435,17 @@ Provide the incident def name.";
                     else if (defCat.defName == "DiseaseAnimal") weight = props.baseWeightDiseaseAnimal;
                     else if (defCat.defName == "OrbitalVisitor") weight = props.baseWeightOrbitalVisitor;
                     else if (defCat.defName == "FactionArrival") weight = props.baseWeightFactionArrival;
+                }
+
+                // A pending world event (Core #135) boosts the matching incident's weight, on top of
+                // whatever base weight resolved above, so the storyteller can manifest it AT the
+                // colony. 1.0 when no source published — purely additive, vanilla weighting untouched.
+                float worldEventBoost = SynapseWorldEventInbox.WeightBoostFor(def.defName, Find.TickManager?.TicksAbs ?? 0);
+                if (worldEventBoost > 1f)
+                {
+                    weight *= worldEventBoost;
+                    string note = $"A world event echoing {def.defName} is reaching the colony.";
+                    if (!activeContextNotes.Contains(note)) activeContextNotes.Add(note);
                 }
 
                 string desc = weightConfig?.description ?? "A standard " + defCat.defName + " event.";
