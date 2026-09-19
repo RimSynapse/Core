@@ -54,6 +54,11 @@ namespace RimSynapse.Comps
         // null means only name/style are injected. The full voice bible is Core #89 (0.10).
         public string personalityProfile;
 
+        // The StorytellerPersonaDef whose voice bible drives the persona engine (Core #69/#89).
+        // Null resolves to the shipped reference persona, Aura. A modder points this at their own
+        // persona def to give this storyteller a different voice with no code.
+        public string personaDefName;
+
         // Base Category Weights
         public float baseWeightThreatBig = 2.0f;
         public float baseWeightThreatSmall = 1.0f;
