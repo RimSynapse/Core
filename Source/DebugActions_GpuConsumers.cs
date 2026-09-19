@@ -8,7 +8,7 @@ namespace RimSynapse
     /// <summary>
     /// Debug validation for the GpuStats in-process consumers channel (Core #104), grouped under
     /// "RimSynapse". Registers a throwaway consumer through the public API and dumps the snapshot a
-    /// monitor mod (the NVIDIA Tool) would read, then removes it so it leaves no residue. Headlessly
+    /// GPU-monitor UI would read, then removes it so it leaves no residue. Headlessly
     /// runnable via run_debug_action.
     /// </summary>
     public static class DebugActions_GpuConsumers

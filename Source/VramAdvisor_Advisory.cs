@@ -48,8 +48,7 @@ namespace RimSynapse
         }
 
         /// <summary>
-        /// Show the VRAM status dialog. Adapts messaging based on headroom
-        /// and only suggests NVIDIA Tool for compatible GPU series.
+        /// Show the VRAM status dialog. Adapts messaging based on headroom.
         /// </summary>
         private static void ShowAdvisory(float totalGb, float lmGb,
             float estFreeGb, string modelName, bool measured, float usedGb)
@@ -80,21 +79,6 @@ namespace RimSynapse
                 "  • Reduce the context window size in LM Studio\n" +
                 "  • Close GPU-heavy background apps (Chrome, Discord)";
 
-            // ── NVIDIA Tool recommendation — only for compatible GPUs ──
-            string nvToolLine = "";
-            bool isRtx40or50 = IsRtx40or50Series(gpuName);
-
-            if (isRtx40or50 && !ModsConfig.IsActive("RimSynapse.NvidiaTool"))
-            {
-                nvToolLine =
-                    "\n\nYour " + gpuName + " supports the RimSynapse NVIDIA Tool\n" +
-                    "companion mod for real-time GPU monitoring and detailed VRAM breakdown.";
-            }
-            else if (!isRtx40or50)
-            {
-                // Non-NVIDIA or older GPU — don't mention the tool at all
-            }
-
             // Measured: show real used/total and skip the per-component estimate lines (the meter's
             // used figure is system-wide and already includes them). Estimate: keep the old breakdown.
             string vramLines = measured
@@ -111,7 +95,6 @@ namespace RimSynapse
                 vramLines +
                 status +
                 suggestions +
-                nvToolLine +
                 "\n\nDisable this notification in Mod Settings → RimSynapse Core.";
 
             LongEventHandler.QueueLongEvent(() =>
@@ -136,26 +119,6 @@ namespace RimSynapse
             }
         }
 
-        /// <summary>
-        /// Detect if the GPU is an NVIDIA RTX 4000 or 5000 series
-        /// (the supported cards for RimSynapse NVIDIA Tool).
-        /// Uses Unity's SystemInfo.graphicsDeviceName which returns
-        /// strings like "NVIDIA GeForce RTX 5070 Ti".
-        /// </summary>
-        private static bool IsRtx40or50Series(string gpuName)
-        {
-            if (string.IsNullOrEmpty(gpuName)) return false;
-
-            string upper = gpuName.ToUpperInvariant();
-
-            // Check for RTX 40xx series: 4060, 4070, 4080, 4090, etc.
-            // Check for RTX 50xx series: 5060, 5070, 5080, 5090, etc.
-            // Also covers Ti/Super variants since we just check the model number prefix
-            if (!upper.Contains("NVIDIA") && !upper.Contains("GEFORCE"))
-                return false;
-
-            return Regex.IsMatch(upper, @"RTX\s*[45]0[5-9]0");
-        }
         /// <summary>
         /// Estimate VRAM usage for an LLM model based on its name.
         /// Parses parameter count (e.g., "12b", "7b") and applies

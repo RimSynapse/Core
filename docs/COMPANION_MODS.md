@@ -15,10 +15,11 @@ Core                      ← LLM client, request queue, tool registry, script r
 │   └── Conversations     ← in-game dialogue UI (requires Core + Psychology)
 │
 ├── Factions              ← faction motivations, diplomacy, population density, map modes
-├── WorldNews             ← planetary news feed and world events
-├── Local-Text-to-Speech  ← on-device speech synthesis (registers the TextToSpeech provider)
-└── NVIDIA-Tool           ← GPU/VRAM stats feeding Core's hardware awareness
+└── WorldNews             ← planetary news feed and world events
 ```
+
+GPU/VRAM monitoring is built into Core itself. On-device text-to-speech is an optional
+external mod (not a RimSynapse mod) that Core routes storyteller speech to when present.
 
 Storyteller mechanisms are embedded in Core — the separate RimSynapse-StoryTeller repo is deprecated. In-game test cases live in each repo's `Source.Tests/`, run by the dev-tools toolkit's bridge mod under `-synapse-test`; the build/launch/log harness is the `rimworld-claude-dev-tools` repo. From 0.10 no repo commits built DLLs — every release ships an installable zip asset, with `Assemblies/CHECKSUMS.sha256` as the tracked record.
 
