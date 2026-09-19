@@ -33,25 +33,10 @@ namespace RimSynapse
         private const int RetryDelayMs = 3000;
         private const int InitialDelayMs = 5000;
 
-        /// <summary>
-        /// Whether the NVIDIA Tool companion mod handles VRAM breakdown.
-        /// The "no model" check still runs from Core regardless.
-        /// </summary>
-        private static bool _nvidiaToolHandlesVram;
-
         internal static void Check()
         {
-
-            // Track whether NVIDIA Tool handles the VRAM advisory —
-            // but we ALWAYS check for LM Studio connectivity (no model = mod broken)
-            _nvidiaToolHandlesVram = ModsConfig.IsActive("RimSynapse.NvidiaTool");
-
-            if (_nvidiaToolHandlesVram)
-            {
-                SynapseLogger.Info("core",
-                    "NVIDIA Tool mod detected — Core will defer VRAM breakdown " +
-                    "but still check LM Studio connectivity.");
-            }
+            // Core owns the GPU/VRAM breakdown outright since 0.10 (#124): the NVIDIA-Tool companion
+            // is retired and its vendor-neutral functionality lives here now. No deferral to check.
 
             // Run the model query on a background thread with delay.
             // At startup, HttpEngine and LM Studio need a few seconds to be ready.
@@ -165,7 +150,7 @@ namespace RimSynapse
                     $"Est. free: ~{freeGb:F1} GB.");
             }
 
-            if (!showNotify || _nvidiaToolHandlesVram || isRemoteHost)
+            if (!showNotify || isRemoteHost)
             {
                 return;
             }

@@ -420,8 +420,8 @@ namespace RimSynapse
 
             listing.CheckboxLabeled("Show VRAM status on game load",
                 ref Settings.showVramAdvisory,
-                "Shows estimated GPU memory breakdown when the game starts.\n" +
-                "Uncheck to disable (only shows if NVIDIA Tool is not installed).");
+                "Shows the measured GPU memory breakdown when the game starts.\n" +
+                "Uncheck to disable.");
 
             listing.CheckboxLabeled("Show LLM Queue Monitor icon on toolbar",
                 ref Settings.showQueueMonitorIcon,

@@ -97,7 +97,6 @@ RimSynapse is a source-available framework designed to be easily hooked into by 
 - RimSynapse - Conversations Source: https://github.com/RimSynapse/Conversations
 - RimSynapse - Factions Source: https://github.com/RimSynapse/Factions
 - RimSynapse - WorldNews Source: https://github.com/RimSynapse/WorldNews
-- RimSynapse - NVIDIA Tool Source: https://github.com/RimSynapse/NVIDIA-Tool
 
 --- Compatibility Matrix ---
 - Royalty DLC: Compatible and Optional. Integrates noble titles and psycast memories if active. Generates arrogant noble decrees and custom empire quests.
