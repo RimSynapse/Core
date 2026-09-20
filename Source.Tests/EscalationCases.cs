@@ -81,7 +81,10 @@ namespace RimSynapse.Tests
                 s.enableEscalation = true;
                 s.escalationCooldownSeconds = 0;
                 s.agentTierMode = 0; // Auto
-                SynapseTierController.ResetForTesting(); // Auto with no evidence => Minimal
+                // Auto->Minimal only happens on a metered backend now (local Auto is full, #139);
+                // the gate refuses specifically on Auto + Minimal.
+                s.apiProvider = ApiProvider.OpenAI;
+                SynapseTierController.ResetForTesting(); // metered Auto + no evidence => Minimal
 
                 Assert.False(SynapseAgentEscalation.Escalate(Ctx("Test.Tier")),
                     "Auto + Minimal must refuse — recovery turns cost more than the skip");
@@ -133,6 +136,7 @@ namespace RimSynapse.Tests
             var savedCap = s.escalationSessionCap;
             var savedTier = s.agentTierMode;
             var savedTurns = s.agentMaxTurns;
+            var savedProvider = s.apiProvider;
             SynapseAgentEscalation.ResetForTesting();
             try
             {
@@ -145,6 +149,7 @@ namespace RimSynapse.Tests
                 s.escalationSessionCap = savedCap;
                 s.agentTierMode = savedTier;
                 s.agentMaxTurns = savedTurns;
+                s.apiProvider = savedProvider;
                 SynapseAgentEscalation.ResetForTesting();
                 SynapseTierController.ResetForTesting();
             }

@@ -22,16 +22,44 @@ namespace RimSynapse.Tests
             yield return new SynapseTestCase("Core_TierStartsMinimal", () => WithSettings(s =>
             {
                 s.agentTierMode = 0;
+                s.apiProvider = ApiProvider.OpenAI; // metered: the latency dance applies to cloud only now (#139)
                 SynapseTierController.ResetForTesting();
                 SynapseTierController.Update(force: true);
                 Assert.Equal(SynapseCapabilityTier.Minimal, SynapseTierController.Current,
-                    "with no samples the tier must start Minimal regardless of window");
-                return "starts Minimal with no evidence";
+                    "a metered backend with no samples must start Minimal regardless of window");
+                return "metered starts Minimal with no evidence";
+            }));
+
+            // Local backends (Core #139): full quality within the window immediately — no sample/latency
+            // gating and never demoted, because latency is irrelevant for rare async one-shots and
+            // demoting frees no VRAM.
+            yield return new SynapseTestCase("Core_TierLocalFullQuality", () => WithSettings(s =>
+            {
+                s.agentTierMode = 0;
+                s.apiProvider = ApiProvider.Local_LMStudio;
+                s.modelContextLimit = 20224;
+                SynapseTierController.ResetForTesting();
+                SynapseTierController.Update(force: true);
+                int window = SynapseTierController.EffectiveWindow;
+                var expected = window >= SynapseTierController.RichMinWindow
+                    ? SynapseCapabilityTier.Rich : SynapseCapabilityTier.Standard;
+                Assert.Equal(expected, SynapseTierController.Current,
+                    "local with no samples must be full quality, never Minimal");
+
+                // Slow responses must NOT demote a local backend.
+                for (int i = 0; i < 10; i++) SynapsePerformanceModel.Record("dialogue", 15000, 500);
+                SynapseTierController.Update();
+                Assert.Equal(expected, SynapseTierController.Current,
+                    "sustained slow latency must not demote a local backend");
+                Assert.True(SynapseTierController.Current != SynapseCapabilityTier.Minimal,
+                    "local must never be Minimal on Auto");
+                return $"local full ({SynapseTierController.Current}) and immune to latency demotion";
             }));
 
             yield return new SynapseTestCase("Core_TierPromotesOnEvidence", () => WithSettings(s =>
             {
                 s.agentTierMode = 0;
+                s.apiProvider = ApiProvider.OpenAI; // step-by-step promotion is a metered-path behaviour now
                 s.modelContextLimit = 32768;
                 SynapseTierController.ResetForTesting();
                 SynapseTierController.Update(force: true); // absorb window change from reset
@@ -55,6 +83,7 @@ namespace RimSynapse.Tests
             yield return new SynapseTestCase("Core_TierDemotesImmediately", () => WithSettings(s =>
             {
                 s.agentTierMode = 0;
+                s.apiProvider = ApiProvider.OpenAI; // latency demotion is a metered-path behaviour now (#139)
                 s.modelContextLimit = 32768;
                 SynapseTierController.ResetForTesting();
                 SynapseTierController.Update(force: true);
@@ -107,6 +136,7 @@ namespace RimSynapse.Tests
             yield return new SynapseTestCase("Core_ModelSwapResets", () => WithSettings(s =>
             {
                 s.agentTierMode = 0;
+                s.apiProvider = ApiProvider.OpenAI; // metered: a window change clears history -> insufficient samples -> Minimal
 
                 // The window is only manipulable when no live provider discovery pinned it.
                 s.modelContextLimit = 32768;
@@ -127,10 +157,41 @@ namespace RimSynapse.Tests
                 SynapseTierController.Update(force: true);
 
                 Assert.Equal(SynapseCapabilityTier.Minimal, SynapseTierController.Current,
-                    "a window change must reset the tier to Minimal");
+                    "a metered window change clears history, so insufficient samples drop it to Minimal");
                 Assert.Equal(0, SynapsePerformanceModel.TotalSampleCount(),
                     "a window change must clear the latency history");
-                return "model swap re-tiers and clears history";
+                return "metered model swap re-tiers and clears history";
+            }, skippable: true));
+
+            // Local window change (Core #139): a bigger reloaded window must RE-BUDGET to full, not
+            // stick at Minimal — the "Minimal forever" trap. And a window change never demotes a local
+            // backend below full; it just clears the stale latency history.
+            yield return new SynapseTestCase("Core_TierLocalWindowChangeRebudgets", () => WithSettings(s =>
+            {
+                s.agentTierMode = 0;
+                s.apiProvider = ApiProvider.Local_LMStudio;
+
+                s.modelContextLimit = 20224;
+                int wBig = SynapseTierController.EffectiveWindow;
+                s.modelContextLimit = 8192;
+                if (wBig == SynapseTierController.EffectiveWindow)
+                    throw new SynapseTestFailure("SKIPMARKER: window pinned by live provider discovery");
+
+                // Start small, then "reload" a bigger window — must promote, not stay stuck.
+                s.modelContextLimit = 8192;
+                SynapseTierController.ResetForTesting();
+                SynapseTierController.Update(force: true);
+                Assert.True(SynapseTierController.Current != SynapseCapabilityTier.Minimal,
+                    "local at 8192 must be full, not Minimal");
+
+                s.modelContextLimit = 20224; // user reloads a larger window mid-session
+                SynapseTierController.Update(force: true);
+                Assert.Equal(20224, SynapseTierController.EffectiveWindow, "the new window is picked up");
+                Assert.Equal(SynapseCapabilityTier.Rich, SynapseTierController.Current,
+                    "a bigger reloaded window must re-budget to full (Rich), not stay Minimal");
+                Assert.Equal(0, SynapsePerformanceModel.TotalSampleCount(),
+                    "a window change clears stale latency history");
+                return "local re-budgets to Rich on a window bump (no Minimal-forever)";
             }, skippable: true));
 
             yield return new SynapseTestCase("Core_FloorObjectiveUnmetered", () => WithSettings(s =>
