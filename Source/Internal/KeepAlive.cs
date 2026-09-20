@@ -12,6 +12,13 @@ namespace RimSynapse.Internal
         private static Timer _timer;
         private static readonly TimeSpan Interval = TimeSpan.FromMinutes(4);
 
+        // Re-poll model info (incl. the loaded context window) on this cadence so a model reload or
+        // n_ctx change is picked up mid-session instead of freezing the window read at startup — the
+        // "Minimal forever" trap (Core #139). Rides the keep-alive tick; a manual refresh or an
+        // earlier signal (startup poll) can update it sooner.
+        private static readonly TimeSpan ModelRefreshInterval = TimeSpan.FromMinutes(30);
+        private static DateTime _lastModelRefresh = DateTime.MinValue;
+
         /// <summary>
         /// Start the keep-alive timer. Safe to call multiple times.
         /// </summary>
@@ -41,6 +48,17 @@ namespace RimSynapse.Internal
             if (settings == null || !settings.enableKeepAlive)
             {
                 Stop();
+                return;
+            }
+
+            // Periodically re-read model info so a reloaded model / changed context window is picked
+            // up (~30 min cadence). RefreshCache re-queries /api/v0 loaded_context_length; the tier
+            // controller re-budgets to it on its next update. TierController.Update never demotes on a
+            // window change now, so a bigger window promotes rather than sticking at stale quality.
+            if (DateTime.UtcNow - _lastModelRefresh >= ModelRefreshInterval)
+            {
+                _lastModelRefresh = DateTime.UtcNow;
+                ModelManager.RefreshCache();
                 return;
             }
 
