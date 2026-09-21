@@ -55,11 +55,10 @@ RimSynapse Core is a powerful, asynchronous background engine that natively brin
 - Native Event Interception: Automatically captures major vanilla game events (marriages, legendary crafts, pawn deaths) via Harmony patches. It also natively intercepts standard storytelling events, raids, and quests to generate rich, contextual, multi-stage narratives via the LLM.
 - Faction Perception Tracking: Each faction maintains subjective "Perceived Wealth" and "Perceived Strength" values for your colony, updated only through direct contact (visitors, traders, caravans).
 - Memory Infrastructure: Provides the per-pawn memory bank, weighted tag system, and decay engine used by companion mods to give colonists persistent, evolving memories.
-- Colony Snapshots: When events occur, the framework captures a snapshot of the colony's wealth, nutrition, and pawn status, providing rich context for AI-generated responses.
 - Opportunistic Task Scheduling: A background task manager that feeds low-priority LLM requests (backstory generation, memory creation) into idle GPU cycles without impacting gameplay performance.
 
 --- A Personal Note ---
-AI is incredibly cool, and having a framework to utilize powerful, no-cost local models really appealed to me. RimWorld is relatively light on GPU overhead, making it the absolute perfect candidate to max out those graphics cards by running a local LLM in the background. My goal with RimSynapse is to push the boundaries of emergent storytelling using the hardware you already own.
+RimWorld is light on GPU overhead - the perfect candidate to put your graphics card to work running a local LLM in the background. My goal with RimSynapse is to push emergent storytelling using the hardware you already own.
 
 --- Roadmap ---
 0.11 - LLM-Driven Quest Generation and Hardening: quests whose flavour originates from the LLM, plus externalising user-facing strings for localization.
@@ -75,53 +74,16 @@ These ship when they are ready - no dates.
 - IMPROVED - Deferred-news locality gate: only off-world news is ever delayed; colony-local letters (local disease, research done, births, mental states) always show immediately.
 - CHANGED - Vanilla letter interception retired in favour of the additive, outbound world-event model above; the LLM storyteller now chooses from the full event pool across all categories.
 
---- Changelog (v0.9.3) - No more freezes on mental breaks ---
-- FIX - Dynamic mental-break resolution no longer freezes the game. The break tool ran its second-stage "isolated solver" LLM call on the main thread, so the whole game paused for the length of that call - as long as your LLM backend took to respond or reload a model. The solver now runs on a background thread and the break action applies when it returns.
-- FIX - Opening the model selector in Mod Settings no longer briefly freezes while it queries LM Studio; the model list is now fetched off the main thread.
-
---- Changelog (v0.9.2) - Packaging fix ---
-- FIX - The v0.9.1 GitHub/RimSort release archive shipped without RimSynapseCore.dll, so a fresh install from GitHub had no Core assembly and companion mods aborted loading (Prepatcher "ReflectionTypeLoadException"). v0.9.2 re-releases the same code with the assembly correctly included. No gameplay changes; Steam Workshop installs were unaffected.
-
---- Changelog (v0.9.1) - Fixes and the Speech Surface ---
-- FIX - Ambient dialogue no longer leaks raw job defNames: a labelless job (e.g. GotoWander) is now humanized to readable text instead of surfacing as "the gotowander they've been busy with".
-- SAFETY - Completed the mutating-tool manifest: nine previously-unflagged state-changing tools are now flagged, so autonomous runs cannot invoke them unless mutations are explicitly allowed.
-- NEW (for modders) - TextToSpeech provider surface: a Core provider slot plus the SynapseSpeech accessor that Local-TTS and other speech mods bind to, with a documented unregistered fallback.
-- Internal - The in-game test suite now lives in-repo, and release builds ship a RimSort-installable zip asset alongside a per-file checksum manifest.
-
---- Changelog (v0.9.0) - The Aura Storyteller Engine ---
-- NEW - LLM-driven incident selection: the AI chooses WHICH eligible incident fires on the game's own deterministic cadence - it never rolls timing, only picks what. Backend offline falls back to the vanilla weighted roll, so the colony is always fully playable.
-- NEW - Storyteller tool vocabulary: a curated allowlist of storytelling verbs enforced at the executor boundary; god-mode tools are structurally unreachable and consequence verbs clamp to the difficulty budget.
-- NEW - Difficulty and personality context: your difficulty (including the custom threat-scale slider) reaches the storyteller as a hard points ceiling plus a mood mandate, alongside her personality profile.
-- NEW - Player-storyteller chat window (migrated from Conversations): storyteller-gated, save-backed, optional voice - works with or without Conversations installed.
-- NEW - Two agents, two scopes: the Chat agent holds zero consequence tools and player messages never trigger storyteller turns; only a typed mood signal - never your words - reaches the storyteller.
-- NEW - World history store with open threads the storyteller calls back to later; bounded so saves stay sane.
-- NEW - Regional-incident lifecycle hook: Core broadcasts incident start and first-level resolution for companion mods to react on their own terms.
-- NEW - Memory-linkage framework: one canonical pawn-id scheme, so chit-chat about a pawn truly consolidates with later events about them.
-- NEW - GpuStats in-process consumers channel: mods loading models into VRAM inside RimWorld's process (e.g. Local TTS) get their own line in the NVIDIA Tool's VRAM breakdown.
-
 Full version history: https://github.com/RimSynapse/Core/wiki/Changelog
 
 --- For Developers ---
-RimSynapse is a source-available framework designed to be easily hooked into by other modders. It is licensed under PolyForm Noncommercial 1.0.0: free to use, modify and share for any noncommercial purpose. I highly encourage you to read the framework documentation and build your own LLM-driven mods!
-- RimSynapse - Core Source and Docs: https://github.com/RimSynapse/Core
-- RimSynapse - Psychology Source: https://github.com/RimSynapse/Psychology
-- RimSynapse - Conversations Source: https://github.com/RimSynapse/Conversations
-- RimSynapse - Factions Source: https://github.com/RimSynapse/Factions
-- RimSynapse - WorldNews Source: https://github.com/RimSynapse/WorldNews
-
---- Compatibility Matrix ---
-- Royalty DLC: Compatible and Optional. Integrates noble titles and psycast memories if active. Generates arrogant noble decrees and custom empire quests.
-- Ideology DLC: Compatible and Optional. Integrates precepts, rituals, and conversions if active. Reframes quests as holy crusades and divine visions.
-- Biotech DLC: Compatible and Optional. Integrates xenotypes, mechinators, and genetic history if active. Describes mechanitor threats as cold satellite broadcasts.
-- Anomaly DLC: Compatible and Optional. Integrates entity encounters and void studies if active. Translates events into chilling whispers and void phenomena.
+RimSynapse is a source-available framework designed to be easily hooked into by other modders (PolyForm Noncommercial 1.0.0). Read the framework docs and build your own LLM-driven mods!
+- Source and docs (Core + companions): https://github.com/RimSynapse
 
 --- Requirements and Setup ---
 - Harmony is required.
 - You must be running a local LLM server (like LM Studio or Ollama). We recommend 8B+ parameter models.
-- IMPORTANT: If you are using a reasoning model (such as DeepSeek-R1, or reasoning variants of Gemma and Qwen), they will generate a long chain of thought before responding. This can cause latency of 30-40 seconds per request.
-  - To disable thinking in LM Studio: Go to the "My Models" tab, select your active model, and in the right-hand "Inference Settings" panel, toggle "Enable Thinking" to OFF.
-  - To disable thinking in Ollama and vLLM: Check the "Disable thinking/reasoning" option under RimSynapse Core mod settings in-game.
-  - For the fastest, instant responses (2-3 seconds), we recommend using standard non-reasoning "Instruct" models (such as gemma-2-9b-it or llama-3-8b-instruct).
+- Non-reasoning "Instruct" models (e.g. gemma-2-9b-it, llama-3-8b-instruct) are fastest (2-3s). Reasoning models add 30-40s of chain-of-thought - disable thinking in your backend or in Core's mod settings. Full setup guide on the wiki.
 
 --- Support the Project ---
 If you enjoy this framework and want to support the development of genuine AI-driven gameplay, consider buying me a coffee!
