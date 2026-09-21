@@ -13,15 +13,13 @@ namespace RimSynapse
     /// headroom for both RimWorld and their loaded LLM model. If headroom is
     /// tight, shows a non-blocking notification with suggestions.
     ///
-    /// For detailed real-time GPU monitoring, points users to the companion
-    /// mod RimSynapse NVIDIA Tool.
     ///
     /// NOT a GameComponent — zero save-file footprint. Safe to add/remove.
     /// </summary>
     public static partial class VramAdvisor
     {
-        /// <summary>Minimum recommended free VRAM in GB (higher than NVIDIA Tool
-        /// since our estimates are less precise than real NVML data).</summary>
+        /// <summary>Minimum recommended free VRAM in GB (kept conservative since these
+        /// estimates are less precise than direct vendor telemetry).</summary>
         private const float MinFreeGb = 4.0f;
 
         /// <summary>
@@ -33,25 +31,10 @@ namespace RimSynapse
         private const int RetryDelayMs = 3000;
         private const int InitialDelayMs = 5000;
 
-        /// <summary>
-        /// Whether the NVIDIA Tool companion mod handles VRAM breakdown.
-        /// The "no model" check still runs from Core regardless.
-        /// </summary>
-        private static bool _nvidiaToolHandlesVram;
-
         internal static void Check()
         {
-
-            // Track whether NVIDIA Tool handles the VRAM advisory —
-            // but we ALWAYS check for LM Studio connectivity (no model = mod broken)
-            _nvidiaToolHandlesVram = ModsConfig.IsActive("RimSynapse.NvidiaTool");
-
-            if (_nvidiaToolHandlesVram)
-            {
-                SynapseLogger.Info("core",
-                    "NVIDIA Tool mod detected — Core will defer VRAM breakdown " +
-                    "but still check LM Studio connectivity.");
-            }
+            // Core owns the GPU/VRAM breakdown outright since 0.10 (#124): vendor-neutral VRAM
+            // monitoring is built in here. No deferral to check.
 
             // Run the model query on a background thread with delay.
             // At startup, HttpEngine and LM Studio need a few seconds to be ready.
@@ -128,34 +111,49 @@ namespace RimSynapse
             }
             // ── Model found — LM Studio is alive ──
             // Now decide whether to show the VRAM breakdown.
-            // If NVIDIA Tool handles VRAM, or user disabled notifications, skip it.
+            // If the host is remote, or the user disabled notifications, skip it.
             bool isRemoteHost = RimSynapseMod.Instance?.Settings?.IsRemoteUrl ?? false;
 
             float lmEstimateGb = EstimateModelVramGb(modelName);
 
-            // RimWorld itself typically uses 0.5-1.5 GB VRAM
-            float rwEstimateGb = 1.0f;
+            // Prefer a MEASURED free-VRAM figure (Core #125) over the old estimate. The meter reports
+            // system-wide dedicated usage — RimWorld, an on-machine LM Studio, and the desktop are all
+            // already counted — so when it answers we use total − measuredUsed directly and never add
+            // the per-component estimates on top (that would double-count the model).
+            bool measured = VramMeter.Sample();
+            float usedGb, freeGb;
+            if (measured)
+            {
+                if (VramMeter.TotalMb > 0f) totalGpuGb = VramMeter.TotalMb / 1024f;
+                usedGb = VramMeter.UsedMb / 1024f;
+                freeGb = VramMeter.FreeMb / 1024f;
 
-            // System/desktop overhead (DWM, compositor, background apps)
-            // Windows 11 with Chrome/Discord easily uses 2-4 GB
-            float systemEstimateGb = 2.5f;
+                SynapseLogger.Warning(
+                    $"VRAM Advisor (measured): {totalGpuGb:F1} GB total, " +
+                    $"{usedGb:F1} GB used system-wide, {freeGb:F1} GB free " +
+                    $"(model {modelName ?? "none"} ~{lmEstimateGb:F1} GB).");
+            }
+            else
+            {
+                // Fallback estimate: model + a nominal RimWorld slice + desktop/background overhead.
+                const float rwEstimateGb = 1.0f;     // RimWorld itself typically uses 0.5-1.5 GB
+                const float systemEstimateGb = 2.5f; // DWM/compositor/background apps (Win11 + Chrome/Discord)
+                usedGb = lmEstimateGb + rwEstimateGb + systemEstimateGb;
+                freeGb = totalGpuGb - usedGb;
 
-            float estimatedUsedGb = lmEstimateGb + rwEstimateGb + systemEstimateGb;
-            float estimatedFreeGb = totalGpuGb - estimatedUsedGb;
+                SynapseLogger.Warning(
+                    $"VRAM Advisor (estimate): {totalGpuGb:F1} GB total, " +
+                    $"~{lmEstimateGb:F1} GB model ({modelName ?? "none"}), " +
+                    $"~{rwEstimateGb:F1} GB RimWorld, ~{systemEstimateGb:F1} GB system. " +
+                    $"Est. free: ~{freeGb:F1} GB.");
+            }
 
-            SynapseLogger.Warning(
-                $"VRAM Advisor (Logging): {totalGpuGb:F1} GB total, " +
-                $"~{lmEstimateGb:F1} GB model ({modelName ?? "none"}), " +
-                $"~{rwEstimateGb:F1} GB RimWorld, " +
-                $"~{systemEstimateGb:F1} GB system. " +
-                $"Est. free: ~{estimatedFreeGb:F1} GB.");
-
-            if (!showNotify || _nvidiaToolHandlesVram || isRemoteHost)
+            if (!showNotify || isRemoteHost)
             {
                 return;
             }
 
-            ShowAdvisory(totalGpuGb, lmEstimateGb, estimatedFreeGb, modelName);
+            ShowAdvisory(totalGpuGb, lmEstimateGb, freeGb, modelName, measured, usedGb);
         }
 
     }

@@ -4,7 +4,7 @@
     <author>RimSynapse Team</author>
     <packageId>RimSynapse.Core</packageId>
     <url>https://github.com/RimSynapse/Core</url>
-    <modVersion>0.9.3</modVersion>
+    <modVersion>0.10.0</modVersion>
     <supportedVersions>
         <li>1.5</li>
         <li>1.6</li>
@@ -30,7 +30,7 @@
     </incompatibleWith>
     <description>
 Discord Community: https://discord.gg/eVBebZ2N9s
-Version: v0.9.3 (Target: RimWorld 1.6)
+Version: v0.10.0 (Target: RimWorld 1.6)
 
 RimSynapse - Core
 Official Wiki and Documentation: https://github.com/RimSynapse/Core/wiki
@@ -42,13 +42,15 @@ RimSynapse Core is a powerful, asynchronous background engine that natively brin
 --- Features ---
 - LLM Direct Action Console (Command in Plain English!): Control the game world using natural language! Open the Direct Action Console, type what you want in plain English (e.g. "Make Fred have 20 Shooting, remove the Bipolar trait from Sarah, and start a fire on the solar generator"), and watch the Storyteller LLM act as an active agent, translating your request into native in-game tool calls and executing them in real-time!
 - Aura, the LLM Storyteller (0.9): with a RimSynapse storyteller selected, the AI chooses WHICH eligible incident fires - on the game's own schedule, inside your difficulty budget, with a full vanilla fallback when the backend is offline. Under Cassandra, Phoebe or Randy the game is completely stock.
+- Storyteller Persona Engine (0.10): Aura's voice is a moddable persona def, not hardcoded - per difficulty she has a personality and hand-written prose for every beat (kickoff, resolution, callback, idle), regenerated in-character by the LLM and falling back to the prose when offline. On Custom difficulty she needles your own slider choices. Copy the def to build your own storyteller with no code.
+- World Events Reach the Colony (0.10): world-event sources (e.g. WorldNews) publish news the storyteller can act on - a plague sweeping the world can actually arrive at your colony. Purely additive and source-gated: with no such source, the storyteller is exactly stock.
 - Storyteller Chat (0.9): talk to Aura in a floating in-game chat window (with optional voice). The chat agent holds zero game-changing tools, and your messages never trigger events - she reads only a coarse mood signal, on her own schedule.
 - World History and Open Threads (0.9): regional events and their outcomes are recorded to a save-backed history the storyteller calls back to later.
 - Universal Backend Support: Connects seamlessly to LM Studio, Ollama, or any OpenAI-compatible local API. While RimSynapse's focus is on local models, with version 0.4.0, it is THE universal LLM connector!
 - Background Threading: Never drops a frame. All LLM requests are queued, processed, and sanitized asynchronously on separate threads.
 - Dynamic Priority Queue: Intelligently manages hundreds of requests with an advanced Linux-style top-monitor queue system, prioritizing critical events and starving obsolete prompts.
 - Auto-Discovery: Automatically detects your active models and manages keep-alive pings to ensure your LLMs don't sleep when you need them.
-- GPU Monitoring: Built-in framework to keep track of local VRAM and processing overhead.
+- GPU/VRAM Monitoring (0.10, any GPU): measured VRAM headroom via DXGI on any card (NVIDIA, AMD, Intel), a consumption breakdown (system / RimWorld / your local model), an on-load advisory, and an in-game dashboard - all built into Core. Absorbs and replaces the separate NVIDIA Tool add-on, which is now retired.
 - Event Tracking Ledger: Maintains a rolling, serializable backlog of major colony events. Core automatically snapshots the colony's wealth, nutrition, and every colonist's mood/health at the exact tick the event occurred, providing perfect chronological context to the LLM.
 - Native Event Interception: Automatically captures major vanilla game events (marriages, legendary crafts, pawn deaths) via Harmony patches. It also natively intercepts standard storytelling events, raids, and quests to generate rich, contextual, multi-stage narratives via the LLM.
 - Faction Perception Tracking: Each faction maintains subjective "Perceived Wealth" and "Perceived Strength" values for your colony, updated only through direct contact (visitors, traders, caravans).
@@ -60,9 +62,18 @@ RimSynapse Core is a powerful, asynchronous background engine that natively brin
 AI is incredibly cool, and having a framework to utilize powerful, no-cost local models really appealed to me. RimWorld is relatively light on GPU overhead, making it the absolute perfect candidate to max out those graphics cards by running a local LLM in the background. My goal with RimSynapse is to push the boundaries of emergent storytelling using the hardware you already own.
 
 --- Roadmap ---
-0.10 - Aura Persona and Foresight: the persona-def-driven storyteller voice, agentic narrate/forecast flows, and LLM-driven quest generation.
-0.11 - Localization and Hardening: externalising every user-facing string so the framework and its modules can be translated.
+0.11 - LLM-Driven Quest Generation and Hardening: quests whose flavour originates from the LLM, plus externalising user-facing strings for localization.
 These ship when they are ready - no dates.
+
+--- Changelog (v0.10.0) - The Storyteller Persona and One-Mod GPU/VRAM ---
+- NEW - Storyteller Persona Engine: Aura's voice is now a moddable persona def. Per difficulty she carries a personality and hand-written prose for every beat (kickoff, positive/negative resolution, callback, idle), regenerated in-character by the LLM with the prose as the offline fallback. Callbacks reference real world-history threads, never invented ones. Copy the def to ship your own storyteller with no code.
+- NEW - Custom-difficulty commentary: on Custom, Aura notices notable slider choices (disabled adversaries, cranked or slashed threats, softened penalties) and needles you for them.
+- NEW - World events reach the colony: external sources (e.g. WorldNews) publish world events the storyteller can manifest AT your colony. Purely additive and source-gated - with no source installed, the storyteller is exactly stock.
+- NEW - GPU/VRAM monitoring is built into Core for ANY GPU (NVIDIA, AMD, Intel): measured VRAM via DXGI, a consumption breakdown, an on-load advisory, and an in-game dashboard. This absorbs the separate NVIDIA Tool add-on, which is now retired - you can unsubscribe from it.
+- NEW - Memory maintenance: relevance-weighted recall, near-duplicate coalescing on ingest, and automatic nightly/periodic compaction so long games keep their memory banks lean.
+- NEW - Open-ended leadership / reports-to hierarchy hook for companion mods, and a MayConverse participation predicate so every mod agrees on who may take part in colony conversations.
+- IMPROVED - Deferred-news locality gate: only off-world news is ever delayed; colony-local letters (local disease, research done, births, mental states) always show immediately.
+- CHANGED - Vanilla letter interception retired in favour of the additive, outbound world-event model above; the LLM storyteller now chooses from the full event pool across all categories.
 
 --- Changelog (v0.9.3) - No more freezes on mental breaks ---
 - FIX - Dynamic mental-break resolution no longer freezes the game. The break tool ran its second-stage "isolated solver" LLM call on the main thread, so the whole game paused for the length of that call - as long as your LLM backend took to respond or reload a model. The solver now runs on a background thread and the break action applies when it returns.
@@ -97,7 +108,6 @@ RimSynapse is a source-available framework designed to be easily hooked into by 
 - RimSynapse - Conversations Source: https://github.com/RimSynapse/Conversations
 - RimSynapse - Factions Source: https://github.com/RimSynapse/Factions
 - RimSynapse - WorldNews Source: https://github.com/RimSynapse/WorldNews
-- RimSynapse - NVIDIA Tool Source: https://github.com/RimSynapse/NVIDIA-Tool
 
 --- Compatibility Matrix ---
 - Royalty DLC: Compatible and Optional. Integrates noble titles and psycast memories if active. Generates arrogant noble decrees and custom empire quests.

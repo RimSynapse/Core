@@ -55,3 +55,27 @@ Regional events — solar flares, toxic fallout, disease outbreaks, weather extr
 recorded into a save-backed world history with their outcomes. Unresolved events stay open
 as threads Aura can call back to later ("the fallout that never quite ended..."). The
 history is bounded, so long games do not bloat their saves.
+
+## The persona engine: Aura is data, not code (0.10)
+
+Aura's voice is not hardcoded — it lives in a **storyteller persona def** (an XML file,
+`Defs/StorytellerPersonas/Persona_Aura.xml`). Per difficulty, the def carries a *persona
+prompt* (the personality the LLM is told to write as) and hand-written *prose exemplars*
+for each beat: when she **kicks off** an incident, when it resolves **well** or **badly**,
+when she **calls back** to an earlier thread, and **idle** ambient lines. The exemplars
+both steer the LLM's style and are the exact lines shown when no model is available — so
+Aura always has something to say, backend or not. On Peaceful she is bored and teasing; on
+Losing-is-Fun she is a gleeful antagonist; the whole arc is authored in the def.
+
+Because the voice is data, **you can build your own storyteller** without writing code:
+copy the def, rewrite the prompts and prose, ship it, and it loads alongside Aura. A
+custom persona can even drop the fourth wall and speak diegetically. Aura is only the
+reference voice.
+
+## World events can reach your colony (0.10)
+
+When a world-event source is active (e.g. RimSynapse WorldNews, or other mods that emit
+world news), the events it publishes become material the storyteller can act on: a plague
+sweeping the world can actually arrive at your colony, a distant war can wash raiders your
+way. This is purely additive — it never silences or rewrites vanilla events, and with no
+such source installed the storyteller behaves exactly as stock.

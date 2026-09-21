@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -218,7 +219,10 @@ namespace RimSynapse.Internal
                         else if (providerHit == ApiProvider.Anthropic_Claude) { settings.tokensPromptClaude += chatResult.promptTokens; settings.tokensCompletionClaude += chatResult.completionTokens; }
                         else if (providerHit == ApiProvider.Custom) { settings.tokensPromptCustom += chatResult.promptTokens; settings.tokensCompletionCustom += chatResult.completionTokens; }
                     }
-                    
+
+                    // Scoped session/save metrics — TOPS, per-model throughput, max call size (#127).
+                    SynapseCallMetrics.Record(providerHit, baseUrl, chatResult);
+
                     return chatResult;
                 }
                 else if (payload is LlmVisionRequest visionReq)
@@ -334,7 +338,14 @@ namespace RimSynapse.Internal
                     }
                 }
 
-                // Dummy request removed: /v1/models now correctly returns all loaded models in LM Studio.
+                // Prefer LM Studio's native /api/v0/models, which reports the ACTUALLY-LOADED context
+                // window (loaded_context_length) — the /v1/models OpenAI-compat endpoint reports no
+                // context field at all, and max_context_length is the GGUF ceiling (e.g. 131072), not
+                // what was loaded. loaded_context_length is the only figure that matches reality
+                // (verified ~94-96% via the gibberish probe, Core #139), so it overrides here.
+                int? loaded = TryReadLoadedContextLength(baseUrl, apiKey);
+                if (loaded.HasValue && loaded.Value > 0)
+                    result.contextLength = loaded.Value;
 
                 return result;
             }
@@ -343,6 +354,43 @@ namespace RimSynapse.Internal
                 string error = ex.InnerException?.Message ?? ex.Message;
                 return new ModelsResult { online = false, error = error };
             }
+        }
+
+        /// <summary>
+        /// Query LM Studio's native REST API (/api/v0/models) for the loaded model's
+        /// <c>loaded_context_length</c> — the real usable window, distinct from the GGUF
+        /// <c>max_context_length</c>. Returns null when the native API is absent (a non-LM-Studio
+        /// backend) or nothing is loaded; the caller then falls back to the OpenAI-probe / user setting.
+        /// </summary>
+        private static int? TryReadLoadedContextLength(string baseUrl, string apiKey)
+        {
+            try
+            {
+                // Native API is a sibling of /v1: strip the OpenAI suffix, append /api/v0/models.
+                string host = baseUrl.TrimEnd('/');
+                foreach (var suffix in new[] { "/v1beta/openai", "/v1/messages", "/v1" })
+                {
+                    if (host.EndsWith(suffix)) { host = host.Substring(0, host.Length - suffix.Length); break; }
+                }
+                string url = $"{host}/api/v0/models";
+
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                if (!string.IsNullOrEmpty(apiKey))
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+
+                var response = _client.SendAsync(request).Result;
+                if (!response.IsSuccessStatusCode) return null;
+
+                var json = JObject.Parse(response.Content.ReadAsStringAsync().Result);
+                var data = json["data"] as JArray;
+                if (data == null) return null;
+
+                // The loaded model's window; fall back to the first entry that reports one.
+                JToken loadedModel = data.FirstOrDefault(m => (m["state"]?.ToString() == "loaded"));
+                int? FromEntry(JToken m) => m?["loaded_context_length"]?.Value<int?>();
+                return FromEntry(loadedModel) ?? data.Select(FromEntry).FirstOrDefault(v => v.HasValue && v.Value > 0);
+            }
+            catch { return null; }
         }
 
         /// <summary>

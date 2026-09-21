@@ -146,20 +146,35 @@ namespace RimSynapse
         {
             int window = EffectiveWindow;
 
-            // A different window means a different model — old timings are meaningless.
+            // A changed window means a different model or a reload — old timings are meaningless, so
+            // reset the perf model and re-budget to the NEW window. Crucially, do NOT demote to Minimal
+            // (Core #139): that left a bigger reloaded window stuck on stale low quality forever. The
+            // periodic model re-poll (every ~30 min) plus this path mean a window bump promotes.
             if (_lastSeenWindow > 0 && window != _lastSeenWindow)
             {
                 SynapsePerformanceModel.Reset($"context window changed {_lastSeenWindow} -> {window}");
-                if (_autoTier != SynapseCapabilityTier.Minimal)
-                {
-                    Log(_autoTier, SynapseCapabilityTier.Minimal, $"model swap (window {window})");
-                    _autoTier = SynapseCapabilityTier.Minimal;
-                }
+                SynapseLogger.Message($"[Tier] context window {_lastSeenWindow} -> {window} tokens; re-budgeting.", "performance");
                 _lastChange = DateTime.UtcNow;
             }
             _lastSeenWindow = window;
 
             var target = ComputeAutoTarget(window, out string trigger);
+
+            // Local backends run at full quality within the window immediately — no latency/sample
+            // gating and no promotion cooldown. Latency is irrelevant for rare async one-shots, and
+            // demoting frees no VRAM, so trading content quality for it is all cost and no benefit
+            // (Core #139). Cost-metered cloud keeps the measured promote/demote dance below.
+            if (!IsBackendMetered())
+            {
+                if (_autoTier != target)
+                {
+                    Log(_autoTier, target, trigger);
+                    _autoTier = target;
+                    _lastChange = DateTime.UtcNow;
+                }
+                LogOperatingPoints();
+                return;
+            }
 
             if (target < _autoTier)
             {
@@ -185,6 +200,15 @@ namespace RimSynapse
 
         private static SynapseCapabilityTier ComputeAutoTarget(int window, out string trigger)
         {
+            // Local backends: full quality within whatever window is loaded — never gated to Minimal
+            // by latency or sample count (Core #139). The window still selects Rich vs Standard, and
+            // GetOperatingPoint caps the per-request budget to the window so prompts never overflow.
+            if (!IsBackendMetered())
+            {
+                trigger = $"local full quality, window={window}";
+                return window >= RichMinWindow ? SynapseCapabilityTier.Rich : SynapseCapabilityTier.Standard;
+            }
+
             int samples = SynapsePerformanceModel.TotalSampleCount();
             if (samples < MinSamplesToPromote)
             {

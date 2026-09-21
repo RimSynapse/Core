@@ -32,6 +32,29 @@ namespace RimSynapse
         }
 
         /// <summary>
+        /// Publish a world-event notification for the storyteller to consider (Core #135). The
+        /// additive, outbound model: an external source (WorldNews, World Domination, …) pushes a
+        /// world event here; the RimSynapse storyteller reads the pending set as incident-selection
+        /// context and weight and may manifest a qualifying one AT the colony. Purely additive — with
+        /// no source publishing, the storyteller is exactly vanilla.
+        ///
+        /// <para>Deliberately all primitives so a producer registers it by reflection with Core
+        /// absent: <c>GenTypes.GetTypeInAnyAssembly("RimSynapse.SynapseCoreContext")
+        /// .GetMethod("PublishWorldEvent").Invoke(null, new object[]{ kind, region, magnitude, origin,
+        /// summary, ttlTicks })</c>.</para>
+        /// </summary>
+        /// <param name="kind">Event kind, matched against incident defNames (e.g. "plague", "raid").</param>
+        /// <param name="region">Coarse location, for flavour. May be empty.</param>
+        /// <param name="magnitude">Severity/scale (nudges selection weight). 0 if unknown.</param>
+        /// <param name="origin">Faction/source name. May be empty.</param>
+        /// <param name="summary">One-line human description for the selection prompt. May be empty.</param>
+        /// <param name="ttlTicks">How long the event stays live; &lt;= 0 uses the default (~2 days).</param>
+        public static void PublishWorldEvent(string kind, string region, float magnitude, string origin, string summary, int ttlTicks)
+        {
+            SynapseWorldEventInbox.Publish(kind, region, magnitude, origin, summary, ttlTicks);
+        }
+
+        /// <summary>
         /// Fires the OnInjectGenericContext event and returns a concatenated string of all injected context.
         /// </summary>
         public static string GatherGenericContext(Pawn pawn, string contextType)

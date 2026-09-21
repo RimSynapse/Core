@@ -13,8 +13,11 @@ namespace RimSynapse.Patches
     /// (and the rewrite prefix behind it) is blocked. When the component re-injects the letter on
     /// release, this prefix recognises it and lets it through so it shows and records normally.
     ///
-    /// <para>Delay is per-category and player-configurable. A category whose delay is 0 passes straight
-    /// through — that is how combat threats stay immediate by default, so raiders are never silent.</para>
+    /// <para>Only world-scoped letters are candidates at all (Core#123): anything witnessed on the
+    /// player's own maps is Local and always passes straight through — word only "travels slowly" from
+    /// elsewhere. Beyond that, delay is per-category and player-configurable; a category whose delay is
+    /// 0 passes through — that is how combat threats stay immediate by default, so raiders are never
+    /// silent (and a threat on the player's own map is immediate regardless of the slider).</para>
     /// </summary>
     [HarmonyPatch(typeof(LetterStack), "ReceiveLetter",
         new Type[] { typeof(Letter), typeof(string), typeof(int), typeof(bool) })]
@@ -35,7 +38,13 @@ namespace RimSynapse.Patches
             if (!(let is ChoiceLetter cl)) return true;   // only structured letters are news
             if (IsExcluded(let)) return true;
 
-            string category = Categorize(let, cl);
+            // The locality gate (Core#123): "word travels slowly" only applies to news from
+            // elsewhere. A colony-local letter — anything witnessed on the player's own maps —
+            // passes through immediately, always; only world-scoped and quest letters can defer.
+            NewsScope scope = DeferredNewsUtility.ClassifyScope(let);
+            if (scope == NewsScope.Local) return true;
+
+            string category = Categorize(let, scope);
             float days = DelayDaysFor(settings, category);
             if (days <= 0f) return true;                  // immediate category (e.g. Threats by default)
 
@@ -56,10 +65,13 @@ namespace RimSynapse.Patches
             return false;
         }
 
-        private static string Categorize(Letter let, ChoiceLetter cl)
+        /// <summary>Category for an already world-scoped letter (Local never reaches here — the gate
+        /// passed it through). The threat slider therefore only governs *distant* threats; a threat on
+        /// the player's own map is witnessed and always immediate, whatever the slider says.</summary>
+        private static string Categorize(Letter let, NewsScope scope)
         {
             if (let.def == LetterDefOf.ThreatBig || let.def == LetterDefOf.ThreatSmall) return "Threat";
-            if (cl.quest != null) return "Quest";
+            if (scope == NewsScope.Quest) return "Quest";
             return "Other";
         }
 

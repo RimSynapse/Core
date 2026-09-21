@@ -7,7 +7,7 @@ using RimSynapse.Models;
 
 namespace RimSynapse.Comps
 {
-    public class SynapseCorePawnComp : ThingComp
+    public partial class SynapseCorePawnComp : ThingComp
     {
         public List<WeightedMemory> memories = new List<WeightedMemory>();
         
@@ -48,6 +48,11 @@ namespace RimSynapse.Comps
         // Rolling mood baseline (EMA of daily average mood) for the reinforcement dimension of the trait
         // engine — a trait needs the behaviour AND a positive mood response to it. -1 = uninitialised.
         public float moodBaseline = -1f;
+
+        // Rolling personal-wealth baseline (EMA of daily individual wealth) for the FORTUNE dimension: is
+        // this pawn's personal fortune rising? Bloodlust reinforcement (Psychology #54) is "killing that
+        // pays off" — kills while wealth+mood climb, not desperate survival killing. -1 = uninitialised.
+        public float wealthBaseline = -1f;
 
         // Grounding history tracking fields
         public List<string> recentLocations = new List<string>();
@@ -99,6 +104,11 @@ namespace RimSynapse.Comps
         public static int ReferenceThreshold = 3;
         public static float TraitPressureDecayPerDay = 0.2f;
 
+        /// <summary>Time window (ticks) for heuristic coalescing of event-less witness memories (Core
+        /// #129). Same-event memories coalesce regardless of window; this bounds the "same type + same
+        /// subjects" fallback. Default ~2 in-game days.</summary>
+        public static int CoalesceWindowTicks = 120000;
+
         public override void PostExposeData()
         {
             base.PostExposeData();
@@ -124,7 +134,8 @@ namespace RimSynapse.Comps
             Scribe_Collections.Look(ref skillXpSinceLevelSnapshot, "skillXpSinceLevelSnapshot", LookMode.Value, LookMode.Value);
             Scribe_Values.Look(ref lastSkillSnapshotTick, "lastSkillSnapshotTick", 0L);
             Scribe_Values.Look(ref moodBaseline, "moodBaseline", -1f);
-            
+            Scribe_Values.Look(ref wealthBaseline, "wealthBaseline", -1f);
+
             Scribe_Collections.Look(ref recentLocations, "recentLocations", LookMode.Value);
             Scribe_Collections.Look(ref recentJobs, "recentJobs", LookMode.Deep);
             Scribe_Values.Look(ref lastJobDefName, "lastJobDefName");
@@ -136,6 +147,7 @@ namespace RimSynapse.Comps
 
             Scribe_Values.Look(ref lastDecayTick, "lastDecayTick", -1);
             Scribe_Values.Look(ref lastOpinionTick, "lastOpinionTick", -1);
+            Scribe_Values.Look(ref lastPentadDay, "lastPentadDay", -1); // memory compaction pentad cadence (#131)
             Scribe_Values.Look(ref memoryScaleVersion, "memoryScaleVersion", 0);
             Scribe_Values.Look(ref traitPressureKeyVersion, "traitPressureKeyVersion", 0);
             
@@ -390,8 +402,14 @@ namespace RimSynapse.Comps
             RebuildMemoryIndexes();
             foreach (var mem in memories) mem.EnsureMemId();
 
+            CoalesceExistingDuplicates(); // #129: collapse duplicate clusters so mature saves shrink
             RecomputeSalienceAndConsolidate();
             DoMemoryDecay();
+
+            // Automatic memory compaction (#131): fold aged-out unremarkable memories into a richer few.
+            // Runs after consolidate/decay so protection-by-salience is current and decayed memories are
+            // already gone. Selection is deterministic here; the LLM writes the prose on the async apply.
+            MaybeCompact();
 
             // Trait pressures ebb toward 0 on days without fresh evidence (design §4.2/§5.7).
             long now = Find.TickManager != null ? Find.TickManager.TicksAbs : 0L;
@@ -591,9 +609,169 @@ namespace RimSynapse.Comps
         {
             if (memory == null) return;
             NormalizeMemory(memory);
+
+            // Coalesce-on-write (Core #129): fold a duplicate into an existing record instead of adding
+            // a near-identical one. Reached via the same path every producer uses, so the store
+            // self-dedups regardless of who mints the memory.
+            var target = TryFindCoalesceTarget(memory);
+            if (target != null)
+            {
+                CoalesceInto(target, memory);
+                return;
+            }
+
             memory.EnsureMemId();
             memories.Add(memory);
             IndexMemory(memory);
+        }
+
+        /// <summary>
+        /// Find an existing memory that <paramref name="incoming"/> should merge into (Core #129), or
+        /// null to add it as new. Two rules: (1) same <see cref="WeightedMemory.sourceEventId"/> — the
+        /// same event, any tier, always coalesces; (2) event-less witness filler — when the owner is a
+        /// witness (not a first-hand participant) of the incoming memory, an existing witness memory of
+        /// the same type + same subjects within <see cref="CoalesceWindowTicks"/> coalesces. First-hand
+        /// and significant memories of distinct events are never merged by the heuristic.
+        /// </summary>
+        private WeightedMemory TryFindCoalesceTarget(WeightedMemory incoming)
+        {
+            if (incoming.isLongTerm) return null;
+
+            // (1) same source event
+            if (!string.IsNullOrEmpty(incoming.sourceEventId))
+            {
+                foreach (var m in memories)
+                    if (m.sourceEventId == incoming.sourceEventId) return m;
+            }
+
+            // (2) event-less witness filler
+            var owner = parent as Pawn;
+            if (owner == null) return null;
+            string ownerId = MemoryPawnId(owner);
+            bool ownerFirsthand = incoming.involvedPawnIds != null && incoming.involvedPawnIds.Contains(ownerId);
+            bool ownerWitness = incoming.witnessPawnIds != null && incoming.witnessPawnIds.Contains(ownerId);
+            if (ownerFirsthand || !ownerWitness) return null; // only collapse owner-witness memories
+
+            foreach (var m in memories)
+            {
+                if (m.isLongTerm) continue;
+                if (m.memoryType != incoming.memoryType) continue;
+                if (!SameSubjects(m, incoming)) continue;
+                // must also be a witness memory for the owner and within the window
+                if (m.involvedPawnIds != null && m.involvedPawnIds.Contains(ownerId)) continue;
+                if (m.witnessPawnIds == null || !m.witnessPawnIds.Contains(ownerId)) continue;
+                if (System.Math.Abs(m.absTick - incoming.absTick) > CoalesceWindowTicks) continue;
+                return m;
+            }
+            return null;
+        }
+
+        private static bool SameSubjects(WeightedMemory a, WeightedMemory b)
+        {
+            var sa = a.subjectPawnIds ?? new List<string>();
+            var sb = b.subjectPawnIds ?? new List<string>();
+            if (sa.Count != sb.Count) return false;
+            foreach (var id in sa) if (!sb.Contains(id)) return false;
+            return true;
+        }
+
+        /// <summary>Fold <paramref name="incoming"/> into <paramref name="target"/> (Core #129): bump the
+        /// occurrence count, reinforce weight and recency, take the most recent date, and union the
+        /// rosters/tags with first-hand winning over witness. No new record is stored.</summary>
+        private void CoalesceInto(WeightedMemory target, WeightedMemory incoming)
+        {
+            target.occurrenceCount += System.Math.Max(1, incoming.occurrenceCount);
+
+            // Reinforce: repetition strengthens the memory, but never past 1.0. Keep the stronger base.
+            target.weight = Clamp01(System.Math.Max(target.weight, incoming.weight) + 0.05f);
+            target.baseWeight = Clamp01(System.Math.Max(target.baseWeight, incoming.baseWeight));
+
+            if (incoming.absTick > target.absTick) target.absTick = incoming.absTick;
+            long now = Find.TickManager != null ? Find.TickManager.TicksAbs : target.lastReferencedTick;
+            if (now > target.lastReferencedTick) target.lastReferencedTick = now;
+            target.timesReferenced += 1;
+
+            MergeInto(target.subjectPawnIds, incoming.subjectPawnIds);
+            MergeInto(target.tags, incoming.tags);
+            MergeInto(target.linkedMemoryIds, incoming.linkedMemoryIds);
+
+            // Involvement: first-hand wins over witness. Union involved, then witnesses not already involved.
+            if (incoming.involvedPawnIds != null)
+                foreach (var id in incoming.involvedPawnIds)
+                {
+                    if (!target.involvedPawnIds.Contains(id)) target.involvedPawnIds.Add(id);
+                    target.witnessPawnIds.Remove(id);
+                }
+            if (incoming.witnessPawnIds != null)
+                foreach (var id in incoming.witnessPawnIds)
+                    if (!target.involvedPawnIds.Contains(id) && !target.witnessPawnIds.Contains(id))
+                        target.witnessPawnIds.Add(id);
+
+            // Subjects/tags may have grown; re-index cleanly (IndexMemory appends, so unindex first).
+            UnindexMemory(target);
+            IndexMemory(target);
+        }
+
+        private static void MergeInto(List<string> dst, List<string> src)
+        {
+            if (dst == null || src == null) return;
+            foreach (var s in src) if (!dst.Contains(s)) dst.Add(s);
+        }
+
+        /// <summary>Retro-coalesce existing duplicate clusters (Core #129) so mature saves shrink, not
+        /// just newly-added memories. Pass A merges records sharing a <see cref="WeightedMemory.sourceEventId"/>;
+        /// pass B merges event-less owner-witness filler of the same type + subjects within the window.
+        /// Long-term memories are left intact.</summary>
+        private void CoalesceExistingDuplicates()
+        {
+            if (memories.Count < 2) return;
+            var toRemove = new List<WeightedMemory>();
+
+            // Pass A: same source event (any tier).
+            var keeperByEvent = new Dictionary<string, WeightedMemory>();
+            foreach (var m in memories)
+            {
+                if (m.isLongTerm || string.IsNullOrEmpty(m.sourceEventId)) continue;
+                if (keeperByEvent.TryGetValue(m.sourceEventId, out var keep))
+                {
+                    CoalesceInto(keep, m);
+                    toRemove.Add(m);
+                }
+                else keeperByEvent[m.sourceEventId] = m;
+            }
+
+            // Pass B: event-less owner-witness filler, keyed by type + sorted subjects, within window.
+            var owner = parent as Pawn;
+            if (owner != null)
+            {
+                string ownerId = MemoryPawnId(owner);
+                var keeperByKey = new Dictionary<string, WeightedMemory>();
+                foreach (var m in memories)
+                {
+                    if (m.isLongTerm || toRemove.Contains(m)) continue;
+                    if (!string.IsNullOrEmpty(m.sourceEventId)) continue;
+                    bool ownerFirsthand = m.involvedPawnIds != null && m.involvedPawnIds.Contains(ownerId);
+                    bool ownerWitness = m.witnessPawnIds != null && m.witnessPawnIds.Contains(ownerId);
+                    if (ownerFirsthand || !ownerWitness) continue;
+
+                    var subs = new List<string>(m.subjectPawnIds ?? new List<string>());
+                    subs.Sort();
+                    string key = m.memoryType + "|" + string.Join(",", subs);
+                    if (keeperByKey.TryGetValue(key, out var keep)
+                        && System.Math.Abs(keep.absTick - m.absTick) <= CoalesceWindowTicks)
+                    {
+                        CoalesceInto(keep, m);
+                        toRemove.Add(m);
+                    }
+                    else keeperByKey[key] = m;
+                }
+            }
+
+            if (toRemove.Count > 0)
+            {
+                foreach (var m in toRemove) memories.Remove(m);
+                RebuildMemoryIndexes();
+            }
         }
 
         /// <summary>
@@ -1023,6 +1201,28 @@ namespace RimSynapse.Comps
         }
 
         /// <summary>
+        /// Meal INDULGENCE over roughly the last day (Psychology #62-adjacent Gourmand wiring): the count of
+        /// fine/lavish "ate a good meal" mood memories still recent (age &lt; one day). A pawn who repeatedly
+        /// eats — and enjoys — high-quality food is developing a taste for it; Psychology folds this into the
+        /// Gourmand signal (× the mood response), the same behaviour × reinforcement shape as every other trait.
+        /// Raw fact only. Nutrient paste / raw / awful meals are deliberately excluded — indulgence, not hunger.
+        /// </summary>
+        public static int MealIndulgenceToday(Pawn pawn)
+        {
+            var mem = pawn?.needs?.mood?.thoughts?.memories?.Memories;
+            if (mem == null) return 0;
+            int count = 0;
+            for (int i = 0; i < mem.Count; i++)
+            {
+                var m = mem[i];
+                if (m?.def == null || m.age > GenDate.TicksPerDay) continue;
+                string d = m.def.defName;
+                if (d == "AteLavishMeal" || d == "AteFineMeal") count++;
+            }
+            return count;
+        }
+
+        /// <summary>
         /// Detect skill rust and refresh the daily snapshot. A skill is "rusting" when it is expert-level
         /// (>= <paramref name="expertLevel"/>) and has either dropped a level since the last snapshot, or
         /// lost xp-toward-next-level while going unpractised today (xpSinceMidnight ~ 0). Returns the rusting
@@ -1073,6 +1273,30 @@ namespace RimSynapse.Comps
             float delta = (todayMood - moodBaseline) / (scale <= 0f ? 0.15f : scale);
             if (delta > 1f) delta = 1f; else if (delta < -1f) delta = -1f;
             moodBaseline = 0.9f * moodBaseline + 0.1f * todayMood;
+            return delta;
+        }
+
+        /// <summary>
+        /// The FORTUNE dimension (Psychology #54): fold today's individual wealth into a rolling baseline (EMA)
+        /// and return whether the pawn's personal fortune is rising, in [-1, +1]. Positive = wealthier than
+        /// their recent norm (life getting better); negative = poorer. First call only seeds and returns 0.
+        /// <paramref name="scale"/> is the fractional wealth swing that maps to a full ±1 (default 25%), so a
+        /// pawn steadily accruing loot reads as rising fortune without a single windfall pinning it.
+        /// </summary>
+        public float UpdateWealthBaselineAndGetReinforcement(float todayWealth, float scale = 0.25f)
+        {
+            if (todayWealth < 0f) todayWealth = 0f;
+            if (wealthBaseline < 0f)
+            {
+                wealthBaseline = todayWealth; // first day: seed only, no trend yet
+                return 0f;
+            }
+            // Relative change vs the baseline, so the signal is scale-free across rich and poor colonies.
+            float denom = wealthBaseline > 1f ? wealthBaseline : 1f;
+            float s = scale <= 0f ? 0.25f : scale;
+            float delta = ((todayWealth - wealthBaseline) / denom) / s;
+            if (delta > 1f) delta = 1f; else if (delta < -1f) delta = -1f;
+            wealthBaseline = 0.9f * wealthBaseline + 0.1f * todayWealth;
             return delta;
         }
 
@@ -1133,6 +1357,45 @@ namespace RimSynapse.Comps
             _colonyWealthDay[map.uniqueID] = today;
             _colonyWealthAvg[map.uniqueID] = avg;
             return avg;
+        }
+
+        /// <summary>
+        /// Kill DOMINANCE (Psychology #54): how much this pawn OUT-KILLS their fellow colonists, in [0,1].
+        /// It is the pawn's share of the colony's total lifetime humanlike kills, with a bonus when they are
+        /// the single top killer — the mark of a colony's dedicated warrior rather than one of many hands in a
+        /// survival scramble. Returns 0 for a pawn who has never killed, or when the colony has no kills at all.
+        /// Raw fact only (kills come from vanilla records); Psychology decides what it means for Bloodlust.
+        /// </summary>
+        public static float KillDominance(Pawn pawn)
+        {
+            if (pawn?.Map == null) return 0f;
+            int mine = pawn.records?.GetAsInt(RecordDefOf.KillsHumanlikes) ?? 0;
+            if (mine <= 0) return 0f;
+
+            var colonists = pawn.Map.mapPawns.FreeColonists.ToList();
+            long total = 0;
+            int best = 0;
+            foreach (var c in colonists)
+            {
+                int k = c.records?.GetAsInt(RecordDefOf.KillsHumanlikes) ?? 0;
+                total += k;
+                if (k > best) best = k;
+            }
+            return KillDominanceOf(mine, total, best, colonists.Count);
+        }
+
+        /// <summary>
+        /// The pure kill-dominance math (#54), split out so it is unit-testable without a live colony. A pawn's
+        /// share of colony humanlike kills, with a +0.25 bonus when they are the single top killer (rank 1 in a
+        /// colony of more than one). Clamped to [0,1]; 0 when the pawn or the colony has no kills.
+        /// </summary>
+        public static float KillDominanceOf(int mine, long colonyTotalKills, int colonyBestKills, int colonistCount)
+        {
+            if (mine <= 0 || colonyTotalKills <= 0) return 0f;
+            float share = (float)mine / colonyTotalKills;
+            bool isTopKiller = mine >= colonyBestKills && colonistCount > 1;
+            float dominance = isTopKiller ? System.Math.Min(1f, share + 0.25f) : share;
+            return dominance < 0f ? 0f : (dominance > 1f ? 1f : dominance);
         }
 
         // Reflection into PlayLogEntry_Interaction's protected initiator/intDef — resolved once, and if it

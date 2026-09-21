@@ -114,6 +114,14 @@ namespace RimSynapse
         public int modelContextLimit = 8192;
         public float shortTermMemoryHours = 48f;
 
+        // --- Memory compaction (Core #131) ---
+        // Automatic, short-horizon folding of unremarkable memories into fewer richer ones. Significant
+        // memories are never touched. No player trigger; the long-horizon narrative tiers are tabled (#133).
+        public bool enableMemoryCompaction = true;
+        public bool compactNightly = true;   // fold a day's memories into a Compacted_Day
+        public bool compactPentad = true;     // every 5th day, fold the Compacted_Days into a Compacted_Pentad
+        public int compactionMinMemories = 3; // fewer compactable memories than this in a window -> nothing to fold
+
         // --- Performance ---
         public int timeoutSeconds = 240;
         public int maxRequestsPerMinute = 30;
@@ -169,6 +177,10 @@ namespace RimSynapse
         public bool qmShowResponse = false;
         public bool qmShowProvider = true;
         public bool qmShowModel = true;
+
+        /// <summary>Queue monitor view (Core #128). false = Basic (GPU/VRAM at a glance, the default);
+        /// true = Advanced (the full LLM-call queue and tables).</summary>
+        public bool qmAdvancedView = false;
 
         // --- Capability tier and cost governance ---
 
@@ -327,6 +339,10 @@ namespace RimSynapse
             Scribe_Values.Look(ref maxPacingContextTokens, "maxPacingContextTokens", 4096);
             Scribe_Values.Look(ref modelContextLimit, "modelContextLimit", 8192);
             Scribe_Values.Look(ref shortTermMemoryHours, "shortTermMemoryHours", 48f);
+            Scribe_Values.Look(ref enableMemoryCompaction, "enableMemoryCompaction", true);
+            Scribe_Values.Look(ref compactNightly, "compactNightly", true);
+            Scribe_Values.Look(ref compactPentad, "compactPentad", true);
+            Scribe_Values.Look(ref compactionMinMemories, "compactionMinMemories", 3);
             Scribe_Values.Look(ref traceDebugMode, "traceDebugMode", false);
             Scribe_Values.Look(ref enableTrainingMode, "enableTrainingMode", false);
             Scribe_Values.Look(ref fastTelemetryMode, "fastTelemetryMode", false);
@@ -403,6 +419,7 @@ namespace RimSynapse
             Scribe_Values.Look(ref qmShowResponse, "qmShowResponse", false);
             Scribe_Values.Look(ref qmShowProvider, "qmShowProvider", true);
             Scribe_Values.Look(ref qmShowModel, "qmShowModel", true);
+            Scribe_Values.Look(ref qmAdvancedView, "qmAdvancedView", false);
         }
     }
 }

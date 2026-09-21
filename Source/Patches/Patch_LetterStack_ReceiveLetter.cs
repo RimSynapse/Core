@@ -59,9 +59,13 @@ namespace RimSynapse.Patches
             // Only when the Synapse storyteller is active.
             if (Find.Storyteller?.storytellerComps?.OfType<RimSynapse.Comps.StorytellerComp_Storyteller>().Any() != true) return true;
 
+            // Whitelist gate (#134): hold + enhance ONLY letters with a registered hook. Everything else
+            // — including un-hooked quests like a crash-pod rescue — falls through to vanilla and fires
+            // immediately, so time-critical alerts are never delayed by the async rewrite/TTS.
+            if (!SynapseLetterEnhancement.ShouldEnhance(let)) return true;
+
             bool isThreat = let.def == LetterDefOf.ThreatBig;
             bool isQuest = choiceLet.quest != null;
-            if (!isThreat && !isQuest) return true;      // not something we rewrite
 
             bool isNewQuest = isQuest && choiceLet.quest.State == QuestState.NotYetAccepted;
 

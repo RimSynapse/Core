@@ -105,7 +105,10 @@ namespace RimSynapse.Comps
             // Schedule, don't drive live: the selection is async and lands via IncidentQueue on the
             // game thread (see ApplyEventSelection), which revalidates CanFireNow on fire. The
             // in-flight slot is claimed and released inside TriggerEventSelection.
-            RimSynapse.Comps.SynapseStorytellerOpportunistic.TriggerEventSelection(chosenCategory, target);
+            // #135: pass null → the LLM chooses from the FULL registered event pool (all categories),
+            // difficulty-calibrated, not just within the pre-weighted category. ChooseCategory above
+            // still governs the offline vanilla fallback.
+            RimSynapse.Comps.SynapseStorytellerOpportunistic.TriggerEventSelection(null, target);
         }
     }
 }

@@ -48,30 +48,28 @@ namespace RimSynapse
         }
 
         /// <summary>
-        /// Show the VRAM status dialog. Adapts messaging based on headroom
-        /// and only suggests NVIDIA Tool for compatible GPU series.
+        /// Show the VRAM status dialog. Adapts messaging based on headroom.
         /// </summary>
         private static void ShowAdvisory(float totalGb, float lmGb,
-            float estFreeGb, string modelName)
+            float estFreeGb, string modelName, bool measured, float usedGb)
         {
             string gpuName = UnityEngine.SystemInfo.graphicsDeviceName ?? "Unknown GPU";
-            bool isCritical = estFreeGb < 2.0f && lmGb > 0f;
+            // A measured free figure is trustworthy on its own; an estimated one only warns when we
+            // actually have a model to blame (otherwise the estimate is mostly noise).
+            bool isCritical = estFreeGb < 2.0f && (measured || lmGb > 0f);
 
             // ── Status line ──
+            string freeWord = measured ? "Measured" : "Estimated";
             string status;
-            if (lmGb <= 0f && string.IsNullOrEmpty(modelName))
+            if (!measured && lmGb <= 0f && string.IsNullOrEmpty(modelName))
                 status = "No LLM model detected — VRAM estimate unavailable.";
-            else if (lmGb <= 0f)
-                status =
-                    $"LM Studio model detected: {modelName}\n" +
-                    "Could not estimate VRAM usage for this model.";
             else if (isCritical)
                 status =
-                    $"⚠  Estimated {estFreeGb:F1} GB free — below recommended 2 GB.\n" +
+                    $"⚠  {freeWord} {estFreeGb:F1} GB free — below recommended 2 GB.\n" +
                     "Consider adjusting your system settings before loading a late-game save.";
             else
                 status =
-                    $"✓  Estimated {estFreeGb:F1} GB free — your system should be stable.\n" +
+                    $"✓  {freeWord} {estFreeGb:F1} GB free — your system should be stable.\n" +
                     "See suggestions below if you experience VRAM-related issues.";
 
             // ── Suggestions ──
@@ -81,33 +79,22 @@ namespace RimSynapse
                 "  • Reduce the context window size in LM Studio\n" +
                 "  • Close GPU-heavy background apps (Chrome, Discord)";
 
-            // ── NVIDIA Tool recommendation — only for compatible GPUs ──
-            string nvToolLine = "";
-            bool isRtx40or50 = IsRtx40or50Series(gpuName);
-
-            if (isRtx40or50 && !ModsConfig.IsActive("RimSynapse.NvidiaTool"))
-            {
-                nvToolLine =
-                    "\n\nYour " + gpuName + " supports the RimSynapse NVIDIA Tool\n" +
-                    "companion mod for real-time GPU monitoring and detailed VRAM breakdown.";
-            }
-            else if (!isRtx40or50)
-            {
-                // Non-NVIDIA or older GPU — don't mention the tool at all
-            }
+            // Measured: show real used/total and skip the per-component estimate lines (the meter's
+            // used figure is system-wide and already includes them). Estimate: keep the old breakdown.
+            string vramLines = measured
+                ? $"VRAM: {usedGb:F1} / {totalGb:F1} GB used (measured)\n\n" +
+                  (lmGb > 0f ? $"  • LM Studio model ({modelName}):  ~{lmGb:F1} GB of that\n\n" : "")
+                : $"VRAM: {totalGb:F0} GB total\n\n" +
+                  (lmGb > 0f ? $"  • LM Studio model ({modelName}):  ~{lmGb:F1} GB\n" : "") +
+                  "  • RimWorld (estimate):  ~1.0 GB\n" +
+                  "  • System (estimate):    ~2.5 GB\n\n";
 
             string msg =
                 "RimSynapse — GPU Memory Status\n\n" +
                 $"GPU: {gpuName}\n" +
-                $"VRAM: {totalGb:F0} GB total\n\n" +
-                (lmGb > 0f
-                    ? $"  • LM Studio model ({modelName}):  ~{lmGb:F1} GB\n"
-                    : "") +
-                $"  • RimWorld (estimate):  ~1.0 GB\n" +
-                $"  • System (estimate):    ~2.5 GB\n\n" +
+                vramLines +
                 status +
                 suggestions +
-                nvToolLine +
                 "\n\nDisable this notification in Mod Settings → RimSynapse Core.";
 
             LongEventHandler.QueueLongEvent(() =>
@@ -132,26 +119,6 @@ namespace RimSynapse
             }
         }
 
-        /// <summary>
-        /// Detect if the GPU is an NVIDIA RTX 4000 or 5000 series
-        /// (the supported cards for RimSynapse NVIDIA Tool).
-        /// Uses Unity's SystemInfo.graphicsDeviceName which returns
-        /// strings like "NVIDIA GeForce RTX 5070 Ti".
-        /// </summary>
-        private static bool IsRtx40or50Series(string gpuName)
-        {
-            if (string.IsNullOrEmpty(gpuName)) return false;
-
-            string upper = gpuName.ToUpperInvariant();
-
-            // Check for RTX 40xx series: 4060, 4070, 4080, 4090, etc.
-            // Check for RTX 50xx series: 5060, 5070, 5080, 5090, etc.
-            // Also covers Ti/Super variants since we just check the model number prefix
-            if (!upper.Contains("NVIDIA") && !upper.Contains("GEFORCE"))
-                return false;
-
-            return Regex.IsMatch(upper, @"RTX\s*[45]0[5-9]0");
-        }
         /// <summary>
         /// Estimate VRAM usage for an LLM model based on its name.
         /// Parses parameter count (e.g., "12b", "7b") and applies

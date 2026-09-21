@@ -152,6 +152,27 @@ namespace RimSynapse
             }
 
             listing.Gap(4f);
+            listing.Gap(10f);
+            listing.Label("Memory Compaction",
+                tooltip: "Automatically folds a pawn's unremarkable memories into fewer, richer first-person memories over time. Significant memories (deaths, bonds, pivotal life events, anything already consolidated) are never touched. Runs on its own - nothing you trigger.");
+            listing.GapLine();
+            listing.CheckboxLabeled("Enable memory compaction",
+                ref Settings.enableMemoryCompaction,
+                "Master switch. When off, memories accumulate and decay exactly as before.");
+            if (Settings.enableMemoryCompaction)
+            {
+                listing.CheckboxLabeled("  Nightly fold (a day into one memory)",
+                    ref Settings.compactNightly,
+                    "Each day, once a day's memories have aged past the short-term window, fold the unremarkable ones into a single Compacted_Day memory in the pawn's voice.");
+                listing.CheckboxLabeled("  Five-day fold (days into one memory)",
+                    ref Settings.compactPentad,
+                    "Every fifth day, fold the recent Compacted_Day memories into one Compacted_Pentad - a step back, still no dates.");
+                Settings.compactionMinMemories = (int)listing.SliderLabeled(
+                    $"  Minimum memories to fold: {Settings.compactionMinMemories}",
+                    Settings.compactionMinMemories, 2f, 8f,
+                    tooltip: "A window with fewer compactable memories than this is left alone - nothing to fold.");
+            }
+
             Settings.agentMaxTurns = (int)listing.SliderLabeled(
                 $"Agent turn limit: {Settings.agentMaxTurns}",
                 Settings.agentMaxTurns, 1f, 20f,
@@ -310,7 +331,7 @@ namespace RimSynapse
 
             listing.CheckboxLabeled("Speak storyteller chat replies via local TTS",
                 ref Settings.localTtsSpeakChatReplies,
-                "Route storyteller chat replies to an installed local text-to-speech mod (e.g. Local Text to Speech). Falls back to the audio provider route when no speech mod is installed.");
+                "Route storyteller chat replies to an installed local text-to-speech mod. Falls back to the audio provider route when no speech mod is installed.");
             listing.CheckboxLabeled("Speak letter reactions via local TTS",
                 ref Settings.localTtsSpeakLetters,
                 "Route the storyteller's letter reaction lines to an installed local text-to-speech mod. Falls back to the audio provider route when no speech mod is installed.");
@@ -399,8 +420,8 @@ namespace RimSynapse
 
             listing.CheckboxLabeled("Show VRAM status on game load",
                 ref Settings.showVramAdvisory,
-                "Shows estimated GPU memory breakdown when the game starts.\n" +
-                "Uncheck to disable (only shows if NVIDIA Tool is not installed).");
+                "Shows the measured GPU memory breakdown when the game starts.\n" +
+                "Uncheck to disable.");
 
             listing.CheckboxLabeled("Show LLM Queue Monitor icon on toolbar",
                 ref Settings.showQueueMonitorIcon,

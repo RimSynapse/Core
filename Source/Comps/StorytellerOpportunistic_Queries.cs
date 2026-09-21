@@ -197,6 +197,10 @@ Analyze the situation and provide the PacingMultiplier and CategoryMultipliers."
             string openThreads = coreWorldComp?.WorldHistoryContextBlock();
             if (!string.IsNullOrEmpty(openThreads)) systemPrompt += "\n\n" + openThreads;
 
+            // World events an external source pushed in (Core #135) — additive, empty when no source.
+            string worldEvents = SynapseWorldEventInbox.SelectionContextNote(Find.TickManager?.TicksAbs ?? 0);
+            if (!string.IsNullOrEmpty(worldEvents)) systemPrompt += "\n\n" + worldEvents;
+
             string userMessage = $@"Colony Status:
 {metrics}
 
@@ -217,7 +221,7 @@ Provide the incident def name.";
             SynapseClient.SendTextAsync(
                 RimSynapseMod.ModHandle,
                 request,
-                new ChatOptions { queryId = "storyteller_event_selection", priority = 10, requestName = "Storyteller Event Selection", targetName = category.defName },
+                new ChatOptions { queryId = "storyteller_event_selection", priority = 10, requestName = "Storyteller Event Selection", targetName = category?.defName ?? "AllEvents" },
                 result =>
                 {
                     bool runSecondPass = false;
@@ -279,7 +283,7 @@ Provide the incident def name.";
             SynapseClient.SendTextAsync(
                 RimSynapseMod.ModHandle,
                 secondRequest,
-                new ChatOptions { queryId = "storyteller_event_selection_pass2", priority = 10, requestName = "Storyteller Event Selection Pass 2", targetName = category.defName, toolScope = SynapseToolVocabulary.StorytellerScope },
+                new ChatOptions { queryId = "storyteller_event_selection_pass2", priority = 10, requestName = "Storyteller Event Selection Pass 2", targetName = category?.defName ?? "AllEvents", toolScope = SynapseToolVocabulary.StorytellerScope },
                 secondResult =>
                 {
                     try
@@ -367,6 +371,16 @@ Provide the incident def name.";
             }));
         }
 
+        /// <summary>Debug hook (#135): build the full cross-category event pool the LLM would be offered
+        /// this beat, for validation via a debug action.</summary>
+        internal static string DebugFullEventPool(IIncidentTarget target)
+        {
+            var map = Find.CurrentMap;
+            var coreWorldComp = Find.World?.GetComponent<SynapseCoreWorldComponent>();
+            var props = StorytellerComp_Storyteller.GetActiveStorytellerProps();
+            return BuildAllowedIncidentsList(null, target, props, map, coreWorldComp, out _);
+        }
+
         private static string BuildAllowedIncidentsList(IncidentCategoryDef category, IIncidentTarget target,
             StorytellerCompProperties_Storyteller props, Map map, SynapseCoreWorldComponent coreWorldComp,
             out List<string> activeContextNotes)
@@ -374,14 +388,19 @@ Provide the incident def name.";
             activeContextNotes = new List<string>();
             var incidentLines = new List<string>();
 
+            // category == null → full pool (#135): every event that can fire now, across ALL categories,
+            // so the LLM chooses the actual event (difficulty-calibrated) rather than picking within one
+            // pre-weighted category. A non-null category keeps the old single-category scoping.
             foreach (var def in DefDatabase<IncidentDef>.AllDefs)
             {
-                if (def.category != category) continue;
+                if (category != null && def.category != category) continue;
+                var defCat = def.category;
+                if (defCat == null) continue;
 
                 bool canFire = false;
                 try
                 {
-                    IncidentParms parms = StorytellerUtility.DefaultParmsNow(category, target);
+                    IncidentParms parms = StorytellerUtility.DefaultParmsNow(defCat, target);
                     canFire = def.Worker.CanFireNow(parms);
                 }
                 catch { }
@@ -409,17 +428,29 @@ Provide the incident def name.";
                 }
                 else if (props != null)
                 {
-                    if (category == IncidentCategoryDefOf.ThreatBig) weight = props.baseWeightThreatBig;
-                    else if (category == IncidentCategoryDefOf.ThreatSmall) weight = props.baseWeightThreatSmall;
-                    else if (category == IncidentCategoryDefOf.DiseaseHuman) weight = props.baseWeightDiseaseHuman;
-                    else if (category == IncidentCategoryDefOf.Misc) weight = props.baseWeightMisc;
-                    else if (category.defName == "DiseaseAnimal") weight = props.baseWeightDiseaseAnimal;
-                    else if (category.defName == "OrbitalVisitor") weight = props.baseWeightOrbitalVisitor;
-                    else if (category.defName == "FactionArrival") weight = props.baseWeightFactionArrival;
+                    if (defCat == IncidentCategoryDefOf.ThreatBig) weight = props.baseWeightThreatBig;
+                    else if (defCat == IncidentCategoryDefOf.ThreatSmall) weight = props.baseWeightThreatSmall;
+                    else if (defCat == IncidentCategoryDefOf.DiseaseHuman) weight = props.baseWeightDiseaseHuman;
+                    else if (defCat == IncidentCategoryDefOf.Misc) weight = props.baseWeightMisc;
+                    else if (defCat.defName == "DiseaseAnimal") weight = props.baseWeightDiseaseAnimal;
+                    else if (defCat.defName == "OrbitalVisitor") weight = props.baseWeightOrbitalVisitor;
+                    else if (defCat.defName == "FactionArrival") weight = props.baseWeightFactionArrival;
                 }
-                
-                string desc = weightConfig?.description ?? "A standard " + category.defName + " event.";
-                incidentLines.Add("- '" + def.defName + "' (Base Weight: " + weight.ToString("F1") + "): " + desc);
+
+                // A pending world event (Core #135) boosts the matching incident's weight, on top of
+                // whatever base weight resolved above, so the storyteller can manifest it AT the
+                // colony. 1.0 when no source published — purely additive, vanilla weighting untouched.
+                float worldEventBoost = SynapseWorldEventInbox.WeightBoostFor(def.defName, Find.TickManager?.TicksAbs ?? 0);
+                if (worldEventBoost > 1f)
+                {
+                    weight *= worldEventBoost;
+                    string note = $"A world event echoing {def.defName} is reaching the colony.";
+                    if (!activeContextNotes.Contains(note)) activeContextNotes.Add(note);
+                }
+
+                string desc = weightConfig?.description ?? "A standard " + defCat.defName + " event.";
+                // Tag each line with its category so the LLM has cross-category context in the full pool.
+                incidentLines.Add("- '" + def.defName + "' [" + defCat.defName + "] (Base Weight: " + weight.ToString("F1") + "): " + desc);
             }
 
             return incidentLines.Any() ? string.Join("\n", incidentLines) : "None available.";
@@ -506,13 +537,24 @@ If you need more details to make the decision, return a JSON object containing O
 ";
             }
 
+            // Full pool (#135): category == null means the LLM chooses any event across all categories,
+            // calibrated to the difficulty context appended below. A non-null category keeps the old
+            // single-category framing.
+            string triggerLine = category != null
+                ? "An event trigger has occurred for category: " + category.defName + "."
+                : "An event beat is due. Choose the single event that best serves the story right now, "
+                  + "across ALL categories in the list below — calibrated to the difficulty context that "
+                  + "follows (deliver the right amount of pressure/damage/stress, no more, no less).";
+            string listHeader = category != null ? "ALLOWED INCIDENTS FOR CATEGORY " + category.defName + ":"
+                                                  : "ALLOWED EVENTS (all categories that can fire now):";
+
             return @"You are the " + characterName + @" Event Selector.
 Your writing style is " + speakingStyle + @".
-An event trigger has occurred for category: " + category.defName + @".
+" + triggerLine + @"
 You must pick the EXACT IncidentDefName from the list of allowed incidents below that fits the current narrative best.
 Use the base weights as a reference for how common or rare they should be, but let narrative pacing guide the final choice.
 " + toolInstruction + @"
-ALLOWED INCIDENTS FOR CATEGORY " + category.defName + @":
+" + listHeader + @"
 " + allowedIncidentsList + @"
 
 Legendary Art Attraction: If the colony has legendary art pieces (reported in metrics), choose friendly visitors, guest groups, and affluent/wealthy traders more frequently to simulate them visiting to admire the art. If colony wealth is also high, attract more affluent or exotic traders.
